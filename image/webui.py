@@ -75,6 +75,9 @@ button { margin-top: 1.5rem; width: 100%; padding: .75rem; font-size: .95rem; fo
   font-family: inherit; border: 0; border-radius: 8px;
   background: var(--violet-60); color: #fff; cursor: pointer; }
 button:hover { background: var(--violet-70); }
+#stats { font-size: .85rem; color: var(--gray-30); margin: -.5rem 0 1rem; line-height: 1.6; }
+#stats .num { color: var(--gray-10); font-weight: 600; }
+#stats .err { color: var(--orange-50); display: block; font-size: .8rem; }
 #msg { font-size: .85rem; margin: 1rem 0 0; min-height: 1.2em; }
 #msg.ok { color: var(--green-50); }
 #msg.err { color: var(--red-60); }
@@ -86,6 +89,7 @@ footer { margin-top: 1.5rem; font-size: .75rem; color: var(--gray-60); text-alig
 </header>
 <div class="card">
   <span id="pill"><span class="dot"></span><span id="pill-text">Checking&hellip;</span></span>
+  <div id="stats"></div>
   <p class="help">Paste the credentials shown by <a href="https://manager.braiins.com" target="_blank" rel="noopener">Braiins Manager</a> when you add a new agent (Devices &rarr; Agents &rarr; Add agent). Saving replaces the current credentials and restarts the agent.</p>
   <form id="form">
     <label for="agent_id">Agent ID</label>
@@ -100,7 +104,29 @@ footer { margin-top: 1.5rem; font-size: .75rem; color: var(--gray-60); text-alig
 <script>
 const pill = document.getElementById('pill');
 const pillText = document.getElementById('pill-text');
+const stats = document.getElementById('stats');
 const msg = document.getElementById('msg');
+
+function ago(iso) {
+  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  if (s < 90) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + ' min ago';
+  return Math.round(s / 3600) + ' h ago';
+}
+
+function renderStats(s) {
+  if (!s.configured || !s.running) { stats.innerHTML = ''; return; }
+  const parts = [];
+  if (s.miners !== null) parts.push(`<span class="num">${s.miners}</span> miner${s.miners === 1 ? '' : 's'} found`);
+  if (s.last_sent) parts.push(`telemetry sent <span class="num">${ago(s.last_sent)}</span>`);
+  let html = parts.join(' &middot; ');
+  // Surface errors only if nothing was successfully sent since
+  if (s.last_error && (!s.last_sent || Date.parse(s.last_error.ts) > Date.parse(s.last_sent))) {
+    const msg = s.last_error.msg.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    html += `<span class="err">⚠ ${msg}</span>`;
+  }
+  stats.innerHTML = html;
+}
 
 async function refresh() {
   try {
@@ -108,6 +134,7 @@ async function refresh() {
     if (!s.configured) { pill.className = ''; pillText.textContent = 'Not configured'; }
     else if (s.running) { pill.className = 'running'; pillText.textContent = 'Agent running'; }
     else { pill.className = 'starting'; pillText.textContent = 'Agent starting…'; }
+    renderStats(s);
   } catch (e) { pill.className = 'error'; pillText.textContent = 'UI unreachable'; }
 }
 refresh();
@@ -156,6 +183,38 @@ def daemon_running():
     return subprocess.run(["pidof", "bma-daemon"], capture_output=True).returncode == 0
 
 
+LOG = "/var/log/bma.log"
+TS_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})")
+MINERS_RE = re.compile(r"(\d+) miners polled")
+SENT_RE = re.compile(r"batch sent items=(\d+)")
+ERR_RE = re.compile(r" (?:WARN|ERROR)\s+(?:[\w:]+: )?(.*)")
+
+
+def log_stats():
+    """Parse the tail of the daemon log for miner count / telemetry activity."""
+    stats = {"miners": None, "last_sent": None, "last_error": None}
+    try:
+        with open(LOG, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 262144))
+            tail = f.read().decode(errors="replace")
+    except OSError:
+        return stats
+    for line in tail.splitlines():
+        ts = TS_RE.match(line)
+        ts = ts.group(1) + "Z" if ts else None
+        m = MINERS_RE.search(line)
+        if m:
+            stats["miners"] = int(m.group(1))
+        m = SENT_RE.search(line)
+        if m and ts:
+            stats["last_sent"] = ts
+        m = ERR_RE.search(line)
+        if m and ts:
+            stats["last_error"] = {"ts": ts, "msg": m.group(1)[:120]}
+    return stats
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, body, ctype):
         self.send_response(200)
@@ -167,7 +226,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.split("?")[0].endswith("/status") or self.path.split("?")[0] == "/status":
-            state = {"configured": bool(current_agent_id()), "running": daemon_running()}
+            state = {"configured": bool(current_agent_id()), "running": daemon_running(), **log_stats()}
             self._send(json.dumps(state).encode(), "application/json")
             return
         global VERSION

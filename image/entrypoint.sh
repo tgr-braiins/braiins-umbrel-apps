@@ -5,8 +5,13 @@
 set -eu
 
 CONFIG=/data/daemon.yaml
+LOG=/var/log/bma.log
 mkdir -p /data
-ln -sf /dev/stdout /var/log/bma.log
+
+# The daemon writes $LOG; keep it a real file so the web UI can parse it,
+# and mirror it to stdout so `docker logs` still shows daemon output.
+rm -f "$LOG" && touch "$LOG"
+tail -F "$LOG" &
 
 if [ ! -f "$CONFIG" ] && [ -n "${AGENT_ID:-}" ] && [ -n "${SECRET_KEY:-}" ]; then
     printf 'agent_id: %s\nsecret_key: %s\n' "$AGENT_ID" "$SECRET_KEY" > "$CONFIG"
@@ -24,6 +29,10 @@ term() {
 trap term TERM INT
 
 while true; do
+    # Cap log growth (truncation is safe: daemon appends, tail -F follows)
+    if [ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -gt 52428800 ]; then
+        : > "$LOG"
+    fi
     if [ -f "$CONFIG" ]; then
         MTIME=$(stat -c %Y "$CONFIG")
         if [ -z "$DAEMON_PID" ] || ! kill -0 "$DAEMON_PID" 2>/dev/null; then

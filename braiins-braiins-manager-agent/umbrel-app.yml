@@ -3,7 +3,7 @@ icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/bra
 id: braiins-braiins-manager-agent
 category: bitcoin
 name: Braiins Manager Agent
-version: "4.10.0-build-4"
+version: "4.10.0-build-5"
 tagline: Connect the miners on your local network to Braiins Manager
 description: >-
   Braiins Manager Agent connects mining devices on your local network to
@@ -31,5 +31,6 @@ defaultPassword: ""
 submitter: Braiins
 submission: ""
 releaseNotes: >-
-  Agent 4.10.0. Fixes daemon version display in the app footer; adds store
-  gallery images; image is now pinned by digest.
+  The app page now shows live agent activity: number of miners found and when
+  telemetry was last sent to Braiins Manager. Credential problems (e.g. a
+  mistyped Secret key) are surfaced directly in the UI instead of only in logs.
