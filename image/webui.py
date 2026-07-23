@@ -1,10 +1,17 @@
-"""Minimal config UI for Braiins Manager Agent on Umbrel.
+"""Config UI and status endpoints for Braiins Manager Agent on Umbrel.
 
-Serves one page on :8080 to enter/replace the Agent ID and Secret key
-(generated in Braiins Manager when adding an agent). Writes /data/daemon.yaml;
-the entrypoint supervisor (re)starts bma-daemon when the file changes.
-Styled per design.braiins.com/braiins. The page polls /status and updates
-the state pill live.
+Serves on :8080 (fronted by Umbrel's app_proxy):
+- GET  /               config page to enter/replace the Agent ID and Secret key
+                       (generated in Braiins Manager when adding an agent);
+                       styled per design.braiins.com/braiins
+- POST /               validates the credentials and writes /data/daemon.yaml
+                       (mode 0600); the entrypoint supervisor (re)starts
+                       bma-daemon when the file changes
+- GET  /status         JSON polled by the page every 3 s: daemon state plus
+                       miner count / telemetry activity parsed from the daemon
+                       log tail
+- GET  /widgets/status Umbrel home-screen widget (three-stats), fetched
+                       server-side by umbrelOS
 """
 import html
 import json
