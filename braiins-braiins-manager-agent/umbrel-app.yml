@@ -1,9 +1,8 @@
 manifestVersion: 1
-icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-manager-agent/icon.svg
 id: braiins-braiins-manager-agent
 category: bitcoin
 name: Braiins Manager Agent
-version: "4.10.0-build-5"
+version: "4.10.0"
 tagline: Connect the miners on your local network to Braiins Manager
 description: >-
   Braiins Manager Agent connects mining devices on your local network to
@@ -16,21 +15,46 @@ description: >-
   To use it you need a free Braiins Manager account. Add a new agent in
   Braiins Manager to obtain an Agent ID and Secret key, then paste them into
   this app's settings page.
+releaseNotes: >-
+  Agent 4.10.0. The app page and a new home-screen widget show live agent
+  activity: miners found and when telemetry was last sent to Braiins Manager.
+  The app now runs unprivileged and ships for both x86 and ARM devices.
+
 developer: Braiins
 website: https://braiins.com/manager
 dependencies: []
-repo: ""
-support: https://help.braiins.com
+repo: https://github.com/tgr-braiins/braiins-umbrel-apps
+support: https://academy.braiins.com/braiins-manager/overview
+
 port: 4547
+icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-manager-agent/icon.svg
 gallery:
   - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-manager-agent/gallery/1.png
   - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-manager-agent/gallery/2.png
 path: ""
+
 defaultUsername: ""
 defaultPassword: ""
+
+widgets:
+  - id: "status"
+    type: "three-stats"
+    refresh: "10s"
+    endpoint: "web:8080/widgets/status"
+    link: ""
+    example:
+      type: "three-stats"
+      link: ""
+      items:
+        - title: "Agent"
+          text: "Running"
+          subtext: ""
+        - title: "Miners"
+          text: "3"
+          subtext: "found"
+        - title: "Telemetry"
+          text: "now"
+          subtext: "sent"
+
 submitter: Braiins
 submission: ""
-releaseNotes: >-
-  The app page now shows live agent activity: number of miners found and when
-  telemetry was last sent to Braiins Manager. Credential problems (e.g. a
-  mistyped Secret key) are surfaced directly in the UI instead of only in logs.

@@ -215,6 +215,30 @@ def log_stats():
     return stats
 
 
+def widget_status():
+    """Umbrel home-screen widget (three-stats): agent state, miners, telemetry age."""
+    import datetime
+    configured, running = bool(current_agent_id()), daemon_running()
+    stats = log_stats()
+    state = "Running" if configured and running else ("Starting" if configured else "Setup needed")
+    miners = str(stats["miners"]) if stats["miners"] is not None else "—"
+    telemetry = "—"
+    if stats["last_sent"]:
+        age = (datetime.datetime.now(datetime.timezone.utc)
+               - datetime.datetime.fromisoformat(stats["last_sent"].replace("Z", "+00:00"))).total_seconds()
+        telemetry = "now" if age < 90 else (f"{age / 60:.0f}m ago" if age < 3600 else f"{age / 3600:.0f}h ago")
+    return {
+        "type": "three-stats",
+        "refresh": "10s",
+        "link": "",
+        "items": [
+            {"title": "Agent", "text": state, "subtext": ""},
+            {"title": "Miners", "text": miners, "subtext": "found"},
+            {"title": "Telemetry", "text": telemetry, "subtext": "sent"},
+        ],
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, body, ctype):
         self.send_response(200)
@@ -225,7 +249,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path.split("?")[0].endswith("/status") or self.path.split("?")[0] == "/status":
+        path = self.path.split("?")[0]
+        if path.endswith("/widgets/status"):
+            self._send(json.dumps(widget_status()).encode(), "application/json")
+            return
+        if path.endswith("/status"):
             state = {"configured": bool(current_agent_id()), "running": daemon_running(), **log_stats()}
             self._send(json.dumps(state).encode(), "application/json")
             return

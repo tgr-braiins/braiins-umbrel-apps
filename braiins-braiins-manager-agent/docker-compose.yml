@@ -7,8 +7,10 @@ services:
       APP_PORT: 8080
 
   web:
-    # TODO: move to a Braiins-owned registry + multi-arch + digest pin before real distribution
-    image: ghcr.io/tgr-braiins/braiins-manager-agent:4.10.0-build-5@sha256:3738a98e3b8c8c657e4d66583900eab7bd578bd8665afb20c39890164038cedd
+    # TODO: move to a Braiins-owned registry before official-store submission
+    image: ghcr.io/tgr-braiins/braiins-manager-agent:4.10.0@sha256:ff5db6e6cb05e4098c4f39ae0461ef4f574937b9c6bf863d0e3750b2dfab35a0
+    user: "1000:1000"
+    init: true
     restart: on-failure
     stop_grace_period: 30s
     volumes:

@@ -25,7 +25,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=fetch /bma-daemon /usr/bin/bma-daemon
 COPY webui.py /usr/lib/bma/webui.py
 COPY entrypoint.sh /usr/lib/bma/entrypoint.sh
-RUN chmod 0755 /usr/lib/bma/entrypoint.sh
+RUN chmod 0755 /usr/lib/bma/entrypoint.sh \
+    # the daemon logs to this hardcoded path; pre-create it writable for uid 1000
+    && touch /var/log/bma.log && chown 1000:1000 /var/log/bma.log \
+    && mkdir -p /data && chown 1000:1000 /data
 
 VOLUME /data
 EXPOSE 8080

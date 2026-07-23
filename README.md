@@ -105,13 +105,50 @@ before bumping the compose tag, or the install fails.
 
 1. New agent version is published to the public download feed.
 2. Bump `BMA_VERSION` and the per-arch `.deb` checksums in `image/Dockerfile`.
-3. Build the image for `linux/amd64` + `linux/arm64` and push it to the
-   registry. `image/.gitlab-ci.yml` is a reference pipeline (buildx + QEMU,
-   pushes on `umbrel-*` tags) — adapt it to wherever the build ends up living.
-4. Bump `version` in `braiins-braiins-manager-agent/umbrel-app.yml` and the
-   image tag in `docker-compose.yml`, push this repo.
+3. Build + push the multi-arch image, tagged with the upstream agent version:
+   `docker buildx build --platform linux/amd64,linux/arm64 --tag <registry>/braiins-manager-agent:<X.Y.Z> --push image/`
+   (`image/.gitlab-ci.yml` is a reference pipeline for automating this).
+4. Pin the **multi-arch index digest** in `docker-compose.yml`
+   (`tag@sha256:…` — get it from `docker buildx imagetools inspect <image>:<tag>`),
+   bump `version` in `umbrel-app.yml`, push this repo.
 5. Umbrel shows an "Update" badge to users; updating pulls the new image and
    recreates the containers, keeping the configured credentials.
+
+## Compliance with the official Umbrel App Store
+
+**Read this before changing the package.** The package deliberately follows the
+official packaging contract from
+[getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps) — that repo's
+`AGENTS.md` / `CLAUDE.md` point to repo-local skills in `.claude/skills/`
+(`umbrel-package-app`, `umbrel-update-app`, `umbrel-test-app`) which are the
+authoritative, reviewed packaging rules. If you work on this package with a
+coding agent, have it read those first. Highlights this package implements:
+
+- images multi-arch (`linux/amd64` + `linux/arm64`), publicly pullable,
+  pinned as `tag@sha256:<index digest>`
+- headless upstream fronted by a setup/status web page behind `app_proxy` —
+  no SSH/CLI needed for normal use
+- runs unprivileged (`user: "1000:1000"`, `init: true`); no host mounts,
+  host networking, or Docker socket
+- user state under `${APP_DATA_DIR}/data` (bind-mount source committed as
+  `data/.gitkeep`); manifest `version` is the upstream agent version
+- home-screen widget (`widgets:`) backed by `web:8080/widgets/status`
+
+Validate any change with the official linter (checks manifest shape, port
+uniqueness, image pinning/multi-arch, compose wiring):
+
+```bash
+git clone --depth 1 https://github.com/getumbrel/umbrel-apps /tmp/umbrel-apps
+cp -r braiins-braiins-manager-agent /tmp/umbrel-apps/
+cd /tmp/umbrel-apps && npm ci && npm run lint:apps -- braiins-braiins-manager-agent --check-images
+```
+
+Known intentional deviations (community store vs. official submission):
+
+- `icon` + committed `icon.svg` / `gallery/` — required here (community stores
+  serve assets from the repo); for an official-store PR these are removed and
+  screenshots/logo go in the PR body (Umbrel hosts final assets).
+- `submission: ""` — becomes the PR URL at official submission time.
 
 ## Notes for developers picking this up
 
@@ -125,7 +162,7 @@ before bumping the compose tag, or the install fails.
   - Bridge networking is sufficient; miner discovery is range-based TCP
     scanning, no host networking needed.
 - **TODO before GA**: move repo + image to a Braiins-owned org/registry;
-  pin the compose image by digest; add store gallery images; wire the image
-  build + version bump into the agent release pipeline; consider submitting to
-  the official Umbrel app store (getumbrel/umbrel-apps) instead of — or in
-  addition to — this community store.
+  wire the image build + version bump into the agent release pipeline;
+  submit to the official Umbrel app store (getumbrel/umbrel-apps) — the
+  package already passes their linter except the intentional deviations
+  listed above.

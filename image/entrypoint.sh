@@ -5,12 +5,10 @@
 set -eu
 
 CONFIG=/data/daemon.yaml
+# The daemon writes $LOG (pre-created in the image, writable for uid 1000);
+# mirror it to stdout so `docker logs` still shows daemon output.
 LOG=/var/log/bma.log
-mkdir -p /data
-
-# The daemon writes $LOG; keep it a real file so the web UI can parse it,
-# and mirror it to stdout so `docker logs` still shows daemon output.
-rm -f "$LOG" && touch "$LOG"
+: > "$LOG"
 tail -F "$LOG" &
 
 if [ ! -f "$CONFIG" ] && [ -n "${AGENT_ID:-}" ] && [ -n "${SECRET_KEY:-}" ]; then
