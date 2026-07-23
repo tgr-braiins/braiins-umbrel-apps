@@ -1,0 +1,131 @@
+# Braiins Umbrel Apps
+
+Umbrel community app store for [Braiins](https://braiins.com) apps, currently:
+
+- **Braiins Manager Agent** — connects mining devices on your local network to
+  [Braiins Manager](https://manager.braiins.com), Braiins' fleet-management
+  platform.
+
+> **Status: test/preview.** This store lives on a personal account while we
+> finalize hosting under a Braiins-owned organization. Expect the store URL and
+> image location to change before general availability.
+
+## Install (Umbrel users)
+
+1. In umbrelOS, open **App Store → ⋯ → Community App Stores**.
+2. Add `https://github.com/tgr-braiins/braiins-umbrel-apps`.
+3. Open the Braiins store and install **Braiins Manager Agent**.
+4. In [Braiins Manager](https://manager.braiins.com), add a new agent
+   (Devices → Agents → Add agent) to get an **Agent ID** and **Secret key**.
+5. Open the app on your Umbrel and paste both values. The agent starts, scans
+   your network for miners, and streams telemetry to Braiins Manager.
+
+## Repo layout
+
+- `umbrel-app-store.yml` — store manifest (store id `braiins`)
+- `braiins-braiins-manager-agent/` — the Umbrel app: manifest
+  (`umbrel-app.yml`), `docker-compose.yml`, `icon.svg`
+- `image/` — source of the Docker image
+  (`ghcr.io/tgr-braiins/braiins-manager-agent`)
+
+## How the image works
+
+The image does **not** build the agent from source. It downloads the official
+signed release `.deb` from the public feed
+(`https://downloads.braiins.com/braiins-manager-agent/index.json`), verifies its
+sha256, and extracts the `bma-daemon` binary. On top of that it adds:
+
+- `image/webui.py` — a small config page (stdlib-only Python) where the user
+  enters the Agent ID / Secret key; writes `/data/daemon.yaml`
+- `image/entrypoint.sh` — supervisor that starts the daemon once the config
+  exists and restarts it when the config changes; daemon logs go to
+  `docker logs`
+
+Credentials persist in the Umbrel app-data volume across app updates and are
+removed on uninstall.
+
+## Developing
+
+### Build and smoke-test locally
+
+```bash
+cd image
+docker build -t bma-umbrel-dev .          # plain build gives amd64 (TARGETARCH defaults); use buildx for arm64
+docker run -d --name bma-dev -p 18080:8080 -v bma-dev-data:/data bma-umbrel-dev
+curl http://localhost:18080/status         # {"configured": false, "running": false}
+```
+
+Open http://localhost:18080, paste test credentials from Braiins Manager
+(Devices → Agents → Add agent) — the status pill should turn "Agent running"
+within ~10 s and `docker logs bma-dev` should show the daemon polling.
+Changing credentials in the UI must restart the daemon (new PID).
+
+Cleanup: `docker rm -f bma-dev && docker volume rm bma-dev-data`.
+
+### Push a new image version to ghcr
+
+The package lives at `ghcr.io/tgr-braiins/braiins-manager-agent` and **must stay
+public** (umbreld pulls anonymously). You need a GitHub PAT with
+`write:packages` for an account with access to the package:
+
+```bash
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
+cd image
+docker buildx create --use                 # once; QEMU needed for arm64 on x86 hosts:
+docker run --privileged --rm tonistiigi/binfmt --install arm64
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --tag ghcr.io/tgr-braiins/braiins-manager-agent:<version> \
+  --push .
+```
+
+Use the app version from `umbrel-app.yml` as the tag (e.g. `4.10.0-build-4`).
+`image/.gitlab-ci.yml` automates exactly this; wire it into CI when the repo
+finds its final home.
+
+### Test on a real Umbrel
+
+Add this repo as a community app store (App Store → ⋯ → Community App Stores)
+and install the app. To iterate without waiting for the store's periodic git
+refresh, SSH in (`ssh umbrel@umbrel.local`, dashboard password) and run:
+
+```bash
+cd umbrel/app-stores/<this-store-dir> && git pull
+umbreld client apps.update.mutate --appId braiins-braiins-manager-agent
+# state check:
+umbreld client apps.state.query --appId braiins-braiins-manager-agent
+# container logs (needs sudo):
+sudo docker logs braiins-braiins-manager-agent_web_1
+```
+
+An app install/update **always pulls the image from ghcr** — push the image
+before bumping the compose tag, or the install fails.
+
+## Release flow
+
+1. New agent version is published to the public download feed.
+2. Bump `BMA_VERSION` and the per-arch `.deb` checksums in `image/Dockerfile`.
+3. Build the image for `linux/amd64` + `linux/arm64` and push it to the
+   registry. `image/.gitlab-ci.yml` is a reference pipeline (buildx + QEMU,
+   pushes on `umbrel-*` tags) — adapt it to wherever the build ends up living.
+4. Bump `version` in `braiins-braiins-manager-agent/umbrel-app.yml` and the
+   image tag in `docker-compose.yml`, push this repo.
+5. Umbrel shows an "Update" badge to users; updating pulls the new image and
+   recreates the containers, keeping the configured credentials.
+
+## Notes for developers picking this up
+
+- **Umbrel constraints** (learned by testing on real hardware):
+  - umbreld force-pulls images on install/update — the image must be publicly
+    pullable; `pull_policy` is ignored.
+  - The manifest `port` (currently **4547**) is a static host-port claim.
+    There is no conflict detection or fallback in the platform.
+  - The dashboard CSP (`img-src * blob:`) blocks `data:` URIs — the manifest
+    `icon` must be an http(s) URL.
+  - Bridge networking is sufficient; miner discovery is range-based TCP
+    scanning, no host networking needed.
+- **TODO before GA**: move repo + image to a Braiins-owned org/registry;
+  pin the compose image by digest; add store gallery images; wire the image
+  build + version bump into the agent release pipeline; consider submitting to
+  the official Umbrel app store (getumbrel/umbrel-apps) instead of — or in
+  addition to — this community store.
