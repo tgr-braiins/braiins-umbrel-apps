@@ -128,9 +128,11 @@ document.getElementById('form').addEventListener('submit', async (ev) => {
 
 
 def daemon_version():
+    # `bma-daemon --version` → "braiins-manager-agent 4.10.0 (<commit>, <date>)"
     try:
         out = subprocess.run(["/usr/bin/bma-daemon", "--version"], capture_output=True, text=True).stdout
-        return out.strip().split()[-1] or "?"
+        m = re.search(r"\d+\.\d+\.\d+\S*", out)
+        return m.group(0) if m else "?"
     except Exception:
         return "?"
 

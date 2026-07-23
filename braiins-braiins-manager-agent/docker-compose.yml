@@ -8,7 +8,7 @@ services:
 
   web:
     # TODO: move to a Braiins-owned registry + multi-arch + digest pin before real distribution
-    image: ghcr.io/tgr-braiins/braiins-manager-agent:4.10.0-build-3
+    image: ghcr.io/tgr-braiins/braiins-manager-agent:4.10.0-build-4@sha256:8c3be83f20d962edc5c24fafeb609d0ae89bfb13de1383f435e077c935da02c9
     restart: on-failure
     stop_grace_period: 30s
     volumes:
