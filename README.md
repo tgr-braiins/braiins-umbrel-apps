@@ -51,7 +51,7 @@ removed on uninstall.
 ```bash
 cd image
 docker build -t bma-umbrel-dev .          # plain build gives amd64 (TARGETARCH defaults); use buildx for arm64
-docker run -d --name bma-dev -p 18080:8080 -v bma-dev-data:/data bma-umbrel-dev
+docker run -d --name bma-dev --user 1000:1000 --init -p 18080:8080 -v bma-dev-data:/data bma-umbrel-dev  # mirror prod: unprivileged uid
 curl http://localhost:18080/status         # {"configured": false, "running": false}
 ```
 
@@ -79,7 +79,7 @@ docker buildx build \
   --push .
 ```
 
-Use the app version from `umbrel-app.yml` as the tag (e.g. `4.10.0-build-4`).
+Use the upstream agent version from `umbrel-app.yml` as the tag (e.g. `4.10.0`), then pin the index digest in `docker-compose.yml`.
 `image/.gitlab-ci.yml` automates exactly this; wire it into CI when the repo
 finds its final home.
 

@@ -7,8 +7,9 @@
 #   GHCR_TOKEN — GitHub PAT with write:packages
 #
 # The umbrel-app-store repo on GitHub (manifests, icon) is updated separately —
-# bump `version` in umbrel-app.yml and the image tag in docker-compose.yml there
-# after this pipeline publishes the image.
+# after this pipeline publishes the image, pin the multi-arch INDEX digest in
+# docker-compose.yml (docker buildx imagetools inspect <image>:<tag>) and bump
+# `version` in umbrel-app.yml.
 
 build-push:
   image: docker:27
