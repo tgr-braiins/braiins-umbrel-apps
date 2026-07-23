@@ -19,6 +19,8 @@ Umbrel community app store for [Braiins](https://braiins.com) apps, currently:
    (Devices → Agents → Add agent) to get an **Agent ID** and **Secret key**.
 5. Open the app on your Umbrel and paste both values. The agent starts, scans
    your network for miners, and streams telemetry to Braiins Manager.
+6. Optional: add the app's home-screen widget (right-click the app tile →
+   Widgets) for live miner count and telemetry status on your Umbrel desktop.
 
 ## Repo layout
 
@@ -35,11 +37,14 @@ signed release `.deb` from the public feed
 (`https://downloads.braiins.com/braiins-manager-agent/index.json`), verifies its
 sha256, and extracts the `bma-daemon` binary. On top of that it adds:
 
-- `image/webui.py` — a small config page (stdlib-only Python) where the user
-  enters the Agent ID / Secret key; writes `/data/daemon.yaml`
+- `image/webui.py` — stdlib-only Python on :8080: the config page where the
+  user enters the Agent ID / Secret key (written to `/data/daemon.yaml`, mode
+  0600), `/status` (JSON for the page's live stats — miner count and telemetry
+  activity parsed from the daemon log), and `/widgets/status` (Umbrel
+  home-screen widget)
 - `image/entrypoint.sh` — supervisor that starts the daemon once the config
-  exists and restarts it when the config changes; daemon logs go to
-  `docker logs`
+  exists and restarts it when the config changes; the daemon log is kept as a
+  real file for the stats parsing, mirrored to `docker logs`, size-capped
 
 Credentials persist in the Umbrel app-data volume across app updates and are
 removed on uninstall.

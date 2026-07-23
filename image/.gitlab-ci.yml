@@ -1,6 +1,6 @@
 # REFERENCE pipeline (GitLab CI syntax) — adapt to wherever the image build lands.
 # Builds the Braiins Manager Agent Umbrel image (x86_64 + aarch64) and pushes
-# to ghcr.io. Runs on tags like umbrel-4.10.0-build-4.
+# to ghcr.io. Runs on tags like umbrel-4.10.0 (tag = "umbrel-" + upstream agent version).
 #
 # Required CI/CD variables (Settings → CI/CD → Variables, masked):
 #   GHCR_USER  — GitHub username owning the package (tgr-braiins for now)
