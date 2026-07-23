@@ -1,11 +1,11 @@
-FROM debian:bookworm-slim AS fetch
+FROM alpine:3.21 AS fetch
 
 ARG TARGETARCH=amd64
 ARG BMA_VERSION=4.10.0
 ARG SHA256_AMD64=016034edb0008f03bc6e5f9a2729c25d7aa559cc3f9051909ed855074d2299b3
 ARG SHA256_ARM64=dbd2f869632bd732cd65ccc767cf1f99d5b485c93201b0b315de19bdf6262783
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates curl dpkg
 
 RUN set -eu; \
     case "$TARGETARCH" in \
@@ -18,9 +18,10 @@ RUN set -eu; \
     dpkg-deb -x /tmp/bma.deb /tmp/bma; \
     install -m 0755 /tmp/bma/usr/bin/bma-daemon /bma-daemon
 
-FROM debian:bookworm-slim
+# bma-daemon is statically linked; the base only exists to run webui.py
+FROM alpine:3.21
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates python3 procps && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates python3
 
 COPY --from=fetch /bma-daemon /usr/bin/bma-daemon
 COPY webui.py /usr/lib/bma/webui.py
