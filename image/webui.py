@@ -275,7 +275,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(json.dumps({"ok": False, "message": "Both values must be UUIDs like 123e4567-e89b-42d3-a456-426614174000."}).encode(), "application/json")
             return
         tmp = CONFIG + ".tmp"
-        with open(tmp, "w") as f:
+        # 0600: credentials shouldn't be world-readable on the host
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
             f.write(f"agent_id: {agent_id}\nsecret_key: {secret_key}\n")
         os.replace(tmp, CONFIG)
         self._send(json.dumps({"ok": True, "message": "Saved. The agent is restarting with the new credentials."}).encode(), "application/json")
