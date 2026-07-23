@@ -80,8 +80,11 @@ docker buildx create --use                 # once; QEMU needed for arm64 on x86 
 docker run --privileged --rm tonistiigi/binfmt --install arm64
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
+  --provenance=false \
   --tag ghcr.io/tgr-braiins/braiins-manager-agent:<version> \
   --push .
+# --provenance=false skips BuildKit attestation manifests, which ghcr's UI
+# confusingly lists as an extra "unknown/unknown" architecture
 ```
 
 Use the upstream agent version from `umbrel-app.yml` as the tag (e.g. `4.10.0`), then pin the index digest in `docker-compose.yml`.

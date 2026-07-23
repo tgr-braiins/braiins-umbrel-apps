@@ -25,8 +25,11 @@ build-push:
     - docker run --privileged --rm tonistiigi/binfmt --install arm64
     - docker buildx create --use
     - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+    # --provenance=false: skip attestation manifests (ghcr UI shows them as
+    # a confusing "unknown/unknown" architecture)
     - docker buildx build
       --platform linux/amd64,linux/arm64
+      --provenance=false
       --tag "$IMAGE:$VERSION"
       --push .
     - docker buildx imagetools inspect "$IMAGE:$VERSION"
