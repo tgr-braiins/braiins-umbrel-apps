@@ -21,7 +21,7 @@ website: https://braiins.com/manager
 dependencies: []
 repo: ""
 support: https://help.braiins.com
-port: 8080
+port: 4547
 gallery: []
 path: ""
 defaultUsername: ""
