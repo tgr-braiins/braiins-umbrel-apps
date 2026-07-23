@@ -1,0 +1,30 @@
+manifestVersion: 1
+icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-manager-agent/icon.svg
+id: braiins-braiins-manager-agent
+category: bitcoin
+name: Braiins Manager Agent
+version: "4.10.0-build-3"
+tagline: Connect the miners on your local network to Braiins Manager
+description: >-
+  Braiins Manager Agent connects mining devices on your local network to
+  Braiins Manager (manager.braiins.com), Braiins' fleet-management platform.
+  The agent scans your network for miners, streams telemetry, and executes
+  management commands (pool configuration, power modes, firmware installs,
+  reboots) issued from Braiins Manager.
+
+
+  To use it you need a free Braiins Manager account. Add a new agent in
+  Braiins Manager to obtain an Agent ID and Secret key, then paste them into
+  this app's settings page.
+developer: Braiins
+website: https://braiins.com/manager
+dependencies: []
+repo: ""
+support: https://help.braiins.com
+port: 8080
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: Braiins
+submission: ""

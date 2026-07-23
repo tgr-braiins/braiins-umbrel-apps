@@ -1,0 +1,15 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: braiins-braiins-manager-agent_web_1
+      APP_PORT: 8080
+
+  web:
+    # TODO: move to a Braiins-owned registry + multi-arch + digest pin before real distribution
+    image: ghcr.io/tgr-braiins/braiins-manager-agent:4.10.0-build-3
+    restart: on-failure
+    stop_grace_period: 30s
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
