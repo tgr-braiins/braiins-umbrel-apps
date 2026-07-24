@@ -114,6 +114,11 @@ before bumping the compose tag, or the install fails.
 
 ## Release flow
 
+Automated: `.github/workflows/agent-update.yml` polls the release feed daily
+and opens a ready-made bump PR (image built, smoke-tested, pushed, digest
+pinned) — a maintainer reviews and merges. It performs exactly the manual
+steps below; the manual flow remains the fallback and the source of truth.
+
 1. New agent version is published to the public download feed.
 2. Bump `BMA_VERSION` and the per-arch `.deb` checksums in `image/Dockerfile`.
 3. Build + push the multi-arch image, tagged with the upstream agent version:
