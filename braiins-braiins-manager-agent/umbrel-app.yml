@@ -2,7 +2,7 @@ manifestVersion: 1.1
 id: braiins-braiins-manager-agent
 category: bitcoin
 name: Braiins Manager Agent
-version: "4.10.0"
+version: "4.11.0"
 tagline: Connect the miners on your local network to Braiins Manager
 description: >-
   Braiins Manager Agent connects mining devices on your local network to
@@ -15,10 +15,18 @@ description: >-
   To use it you need a free Braiins Manager account. Add a new agent in
   Braiins Manager to obtain an Agent ID and Secret key, then paste them into
   this app's settings page.
-releaseNotes: >-
-  Agent 4.10.0. The app page and a new home-screen widget show live agent
-  activity: miners found and when telemetry was last sent to Braiins Manager.
-  The app now runs unprivileged and ships for both x86 and ARM devices.
+releaseNotes: |-
+  The Braiins Manager Agent **4.11.0** release adds support for Auradine Teraflux and minor improvements.
+
+  ### New Features
+  - Support for Auradine Teraflux: Braiins Manager now supports miners running Auradine Teraflux firmware, including monitoring and management actions such as pause, resume, reboot, locate, and pool configuration.
+
+  ### Improvements
+  - MARA FW: Miners running MARA firmware now report their control board serial number.
+  &nbsp;
+  &nbsp;
+
+  For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
 
 developer: Braiins
 website: https://braiins.com/manager
