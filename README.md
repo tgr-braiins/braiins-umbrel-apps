@@ -22,6 +22,9 @@ Umbrel community app store for [Braiins](https://braiins.com) apps, currently:
 6. Optional: add the app's home-screen widget (right-click the app tile →
    Widgets) for live miner count and telemetry status on your Umbrel desktop.
 
+Design rationale — why the package is built the way it is — lives in
+[DECISIONS.md](DECISIONS.md). Read it before "fixing" anything that looks odd.
+
 ## Repo layout
 
 - `umbrel-app-store.yml` — store manifest (store id `braiins`)
