@@ -3,8 +3,9 @@
 
 Subcommands:
   check   Fetch the public release feed; if a newer agent version exists,
-          rewrite image/Dockerfile (version + .deb checksums) and
-          umbrel-app.yml (version + releaseNotes from the feed description).
+          rewrite image/Dockerfile (version + .deb checksums), umbrel-app.yml
+          (version + releaseNotes from the feed description), and prepend a
+          CHANGELOG.md entry for the new version.
           Emits `changed=true|false` and `version=X.Y.Z` to $GITHUB_OUTPUT
           (or stdout when run locally).
   pin     Rewrite the compose image reference to a tag@digest. Used after the
@@ -13,6 +14,7 @@ Subcommands:
 Only touches the same fields a human release bump touches (see README
 "Release flow"). No third-party dependencies.
 """
+import datetime
 import json
 import os
 import pathlib
@@ -25,6 +27,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCKERFILE = ROOT / "image/Dockerfile"
 MANIFEST = ROOT / "braiins-braiins-manager-agent/umbrel-app.yml"
 COMPOSE = ROOT / "braiins-braiins-manager-agent/docker-compose.yml"
+CHANGELOG = ROOT / "CHANGELOG.md"
+CHANGELOG_MARKER = "<!-- new entries are inserted directly below this line -->"
 REGISTRY_OWNER = os.environ.get("REGISTRY_OWNER", "tgr-braiins")
 
 
@@ -54,6 +58,29 @@ def current_version():
     return m.group(1)
 
 
+def prepend_changelog(version, desc):
+    """Insert a `## [version] - date` section right below the marker, unless
+    one already exists for this version. Body is the feed description with
+    Umbrel's `&nbsp;` spacer lines dropped and blank runs collapsed, so it
+    reads as plain Markdown."""
+    if not CHANGELOG.exists():
+        return
+    text = CHANGELOG.read_text()
+    if re.search(rf"^## \[{re.escape(version)}\]", text, re.M):
+        return  # already recorded (e.g. re-run of the same bump)
+
+    body_lines = [ln for ln in desc.splitlines() if ln.strip().lower() != "&nbsp;"]
+    body = re.sub(r"\n{3,}", "\n\n", "\n".join(body_lines)).strip()
+    today = datetime.date.today().isoformat()
+    entry = f"\n\n## [{version}] - {today}\n\n{body}"
+
+    if CHANGELOG_MARKER in text:
+        text = text.replace(CHANGELOG_MARKER, CHANGELOG_MARKER + entry, 1)
+    else:  # marker gone: fall back to inserting before the newest entry
+        text = re.sub(r"(?=^## \[)", entry.lstrip("\n") + "\n\n", text, count=1, flags=re.M)
+    CHANGELOG.write_text(text)
+
+
 def check():
     rel = latest_release()
     meta = rel["metadata"]
@@ -81,6 +108,8 @@ def check():
     block = "\n".join(("  " + line).rstrip() for line in desc.splitlines())
     t = re.sub(r"releaseNotes: .*?\n\ndeveloper:", f"releaseNotes: |-\n{block}\n\ndeveloper:", t, count=1, flags=re.S)
     MANIFEST.write_text(t)
+
+    prepend_changelog(new, desc)
 
     out("changed", "true")
     out("version", new)

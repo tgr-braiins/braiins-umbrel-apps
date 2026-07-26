@@ -107,8 +107,10 @@ jobs:
             - multi-arch image pushed to `${{ env.IMAGE }}:${{ steps.bump.outputs.version }}`
             - compose pinned to the multi-arch index digest
             - manifest version + releaseNotes updated from the feed
+            - CHANGELOG.md entry prepended for this version
 
             Review checklist before merging:
             - [ ] releaseNotes text reads sanely (it is taken verbatim from the feed)
+            - [ ] CHANGELOG.md entry reads sanely
             - [ ] update an Umbrel from this branch's store and verify the agent reconnects
           delete-branch: true

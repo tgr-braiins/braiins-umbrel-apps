@@ -32,6 +32,8 @@ Design rationale — why the package is built the way it is — lives in
   (`umbrel-app.yml`), `docker-compose.yml`, `icon.svg`
 - `image/` — source of the Docker image
   (`ghcr.io/tgr-braiins/braiins-manager-agent`)
+- `CHANGELOG.md` — per-version release notes history (the manifest's
+  `releaseNotes` only holds the current version)
 
 ## How the image works
 
