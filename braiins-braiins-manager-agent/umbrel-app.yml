@@ -2,7 +2,7 @@ manifestVersion: 1.1
 id: braiins-braiins-manager-agent
 category: bitcoin
 name: Braiins Manager Agent
-version: "4.11.1-1"
+version: "4.11.1-2"
 tagline: Connect the miners on your local network to Braiins Manager
 description: >-
   Braiins Manager Agent connects mining devices on your local network to
@@ -16,9 +16,9 @@ description: >-
   Braiins Manager to obtain an Agent ID and Secret key, then paste them into
   this app's settings page.
 releaseNotes: |-
-  Home-screen widget refresh: the Umbrel widget now shows an icon for each stat — agent status, miners found, and telemetry — matching umbrelOS's own live-usage widgets.
+  The app's settings page now shows the Umbrel app version in the footer, alongside the agent daemon version, so you can tell which package revision you're running.
 
-  This is a packaging-only update; the Braiins Manager Agent itself is unchanged at 4.11.0.
+  Packaging-only update; the Braiins Manager Agent itself is unchanged at 4.11.0.
 
 developer: Braiins
 website: https://braiins.com/manager
