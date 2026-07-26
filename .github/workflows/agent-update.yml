@@ -72,6 +72,7 @@ jobs:
           sleep 10
           curl -fs http://localhost:18080/status | grep '"running": true'
           curl -fs http://localhost:18080/widgets/status | grep '"three-stats"'
+          curl -fs http://localhost:18080/widgets/status | grep '"icon": "plug-connected"'
           docker logs smoke 2>&1 | tail -5
           docker rm -f smoke
 
@@ -107,8 +108,10 @@ jobs:
             - multi-arch image pushed to `${{ env.IMAGE }}:${{ steps.bump.outputs.version }}`
             - compose pinned to the multi-arch index digest
             - manifest version + releaseNotes updated from the feed
+            - CHANGELOG.md entry prepended for this version
 
             Review checklist before merging:
             - [ ] releaseNotes text reads sanely (it is taken verbatim from the feed)
+            - [ ] CHANGELOG.md entry reads sanely
             - [ ] update an Umbrel from this branch's store and verify the agent reconnects
           delete-branch: true

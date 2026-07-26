@@ -227,21 +227,26 @@ def widget_status():
     import datetime
     configured, running = bool(current_agent_id()), daemon_running()
     stats = log_stats()
-    state = "Running" if configured and running else ("Starting" if configured else "Setup needed")
+    state = "Running" if configured and running else ("Starting" if configured else "Setup")
     miners = str(stats["miners"]) if stats["miners"] is not None else "—"
     telemetry = "—"
     if stats["last_sent"]:
         age = (datetime.datetime.now(datetime.timezone.utc)
                - datetime.datetime.fromisoformat(stats["last_sent"].replace("Z", "+00:00"))).total_seconds()
         telemetry = "now" if age < 90 else (f"{age / 60:.0f}m ago" if age < 3600 else f"{age / 3600:.0f}h ago")
+    # umbrelOS renders three-stats items as {icon, text, subtext}: icon on top,
+    # `text` as the emphasized value, `subtext` as the muted caption. There is
+    # no `title` field. `icon` is a Tabler icon slug (see DECISIONS.md
+    # "Widget icons"): plug-connected = link to Braiins Manager, cpu = miners,
+    # cloud-upload = telemetry stream.
     return {
         "type": "three-stats",
         "refresh": "10s",
         "link": "",
         "items": [
-            {"title": "Agent", "text": state, "subtext": ""},
-            {"title": "Miners", "text": miners, "subtext": "found"},
-            {"title": "Telemetry", "text": telemetry, "subtext": "sent"},
+            {"icon": "plug-connected", "text": state, "subtext": "Agent"},
+            {"icon": "cpu", "text": miners, "subtext": "Miners"},
+            {"icon": "cloud-upload", "text": telemetry, "subtext": "Telemetry"},
         ],
     }
 

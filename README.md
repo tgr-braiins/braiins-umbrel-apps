@@ -32,6 +32,8 @@ Design rationale — why the package is built the way it is — lives in
   (`umbrel-app.yml`), `docker-compose.yml`, `icon.svg`
 - `image/` — source of the Docker image
   (`ghcr.io/tgr-braiins/braiins-manager-agent`)
+- `CHANGELOG.md` — per-version release notes history (the manifest's
+  `releaseNotes` only holds the current version)
 
 ## How the image works
 
@@ -129,6 +131,27 @@ steps below; the manual flow remains the fallback and the source of truth.
    bump `version` in `umbrel-app.yml`, push this repo.
 5. Umbrel shows an "Update" badge to users; updating pulls the new image and
    recreates the containers, keeping the configured credentials.
+
+### Wrapper-only release (no new agent version)
+
+Changes to this repo that don't correspond to a new agent release (the web UI,
+entrypoint, widget, docs) never ship through `agent-update.yml` — it only fires
+when upstream publishes a newer agent. Ship them with the manual
+`.github/workflows/wrapper-release.yml` (Actions tab → **wrapper-release** →
+Run workflow). It rebuilds `image/` (agent binary unchanged), smoke-tests,
+pushes, pins the new digest, and opens a PR — same review gate as the automated
+flow. Two modes, chosen by the `version` input:
+
+- **Give a version** (e.g. `4.11.1-1`) → the manifest `version` + `releaseNotes`
+  are bumped and a `CHANGELOG.md` entry is added, so **existing** installs get an
+  Update badge. umbrelOS keys the badge off the manifest `version`, so it must
+  increase; a pre-release suffix on the next patch (`4.11.1-1`, `4.11.1-2`, …)
+  sorts above the current agent version but below a real upstream `4.11.1`, so
+  upstream always wins when it lands.
+- **Leave it empty** → digest-only re-pin at the current version. New installs
+  pull the rebuilt image; existing installs get **no** badge (version unchanged).
+  Force it onto a test device with
+  `umbreld client apps.update.mutate --appId braiins-braiins-manager-agent`.
 
 ## Compliance with the official Umbrel App Store
 

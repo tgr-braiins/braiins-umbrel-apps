@@ -90,6 +90,19 @@ widget-bearing app declares ≥ 1.1; declaring 1 would let older umbrelOS
 versions install the app with a broken widget. Bump further only when adopting
 newer framework features.
 
+## Widget icons are Tabler slugs, not our own SVGs
+
+umbrelOS renders the home-screen widget itself; the app only returns JSON. A
+`three-stats` item is `{icon, text, subtext}` — there is **no `title` field**
+(an earlier version set `title`, which silently never rendered, and showed no
+icons). `icon` is a [Tabler Icons](https://tabler.io/icons) slug: umbrelOS
+copies `@tabler/icons` (pinned **2.39.0**) to `/generated-tabler-icons/<slug>.svg`
+and serves that, plus four built-in `system-widget-*` icons. An unknown slug
+renders as an empty placeholder box, so a slug must exist *in 2.39.0* — not just
+in the current Tabler set. We use `plug-connected` / `cpu` / `cloud-upload`;
+verify replacements against 2.39.0 before changing them. `text` is the
+emphasized value, `subtext` the muted caption below it.
+
 ## Home-screen widget instead of Docker HEALTHCHECK
 
 umbreld ignores Docker health status entirely (app state is lifecycle-driven —
@@ -99,14 +112,26 @@ live-status surface: umbrelOS fetches `web:8080/widgets/status` server-side
 only improve `docker ps` output for support; add it if support workflows want
 it, but don't expect the dashboard to react.
 
-## Image tag = upstream agent version; pre-GA re-pushes mutate the tag
+## Image tag = upstream agent version; wrapper releases pick a mode
 
 Official rule: manifest `version` is the upstream version users recognize —
-the earlier `4.10.0-build-N` scheme was retired. Wrapper-only changes during
-the preview phase re-push the same tag with a new digest, and compose pins the
+the earlier `4.10.0-build-N` scheme was retired. Compose always pins the
 **multi-arch index digest** (`tag@sha256:…`), so installs are reproducible
-regardless of tag mutation. Once release CI exists, wrapper changes should bump
-a real version instead of mutating tags.
+regardless of tag mutation.
+
+The Update badge is the constraint that shapes wrapper-only releases (a repo
+change with no new agent): umbrelOS computes "update available" in the frontend
+by comparing the installed manifest `version` against the store's — the
+`apps.list` route exposes only `version`, with no content/digest comparison
+(the git-commit check in `app-repository.ts` only decides when to re-pull the
+*store*, not per-app updates). So a wrapper change that keeps `version` gets
+**no** badge for existing installs. `wrapper-release.yml` therefore offers two
+modes: re-push the same tag with a new digest (reproducible, but new installs
+only), or bump `version` — using a pre-release suffix on the next patch
+(`4.11.1-1`) that sorts above the current agent version yet below a real
+upstream `4.11.1`, so upstream always wins when it ships. Don't fake a whole
+upstream version (e.g. jumping to `4.12.0`); it would collide when that agent
+actually releases.
 
 ## `--provenance=false` on buildx
 
