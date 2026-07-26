@@ -13,6 +13,12 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.11.1-2] - 2026-07-26
+
+The app's settings page now shows the Umbrel app version in the footer, alongside the agent daemon version, so you can tell which package revision you're running.
+
+Packaging-only update; the Braiins Manager Agent itself is unchanged at 4.11.0.
+
 ## [4.11.1-1] - 2026-07-26
 
 Home-screen widget refresh: the Umbrel widget now shows an icon for each stat — agent status, miners found, and telemetry — matching umbrelOS's own live-usage widgets.
