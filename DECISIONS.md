@@ -112,14 +112,26 @@ live-status surface: umbrelOS fetches `web:8080/widgets/status` server-side
 only improve `docker ps` output for support; add it if support workflows want
 it, but don't expect the dashboard to react.
 
-## Image tag = upstream agent version; pre-GA re-pushes mutate the tag
+## Image tag = upstream agent version; wrapper releases pick a mode
 
 Official rule: manifest `version` is the upstream version users recognize —
-the earlier `4.10.0-build-N` scheme was retired. Wrapper-only changes during
-the preview phase re-push the same tag with a new digest, and compose pins the
+the earlier `4.10.0-build-N` scheme was retired. Compose always pins the
 **multi-arch index digest** (`tag@sha256:…`), so installs are reproducible
-regardless of tag mutation. Once release CI exists, wrapper changes should bump
-a real version instead of mutating tags.
+regardless of tag mutation.
+
+The Update badge is the constraint that shapes wrapper-only releases (a repo
+change with no new agent): umbrelOS computes "update available" in the frontend
+by comparing the installed manifest `version` against the store's — the
+`apps.list` route exposes only `version`, with no content/digest comparison
+(the git-commit check in `app-repository.ts` only decides when to re-pull the
+*store*, not per-app updates). So a wrapper change that keeps `version` gets
+**no** badge for existing installs. `wrapper-release.yml` therefore offers two
+modes: re-push the same tag with a new digest (reproducible, but new installs
+only), or bump `version` — using a pre-release suffix on the next patch
+(`4.11.1-1`) that sorts above the current agent version yet below a real
+upstream `4.11.1`, so upstream always wins when it ships. Don't fake a whole
+upstream version (e.g. jumping to `4.12.0`); it would collide when that agent
+actually releases.
 
 ## `--provenance=false` on buildx
 

@@ -1,0 +1,125 @@
+# Manual release for WRAPPER-ONLY changes — i.e. changes to this repo (webui.py,
+# entrypoint, compose, manifest, docs) with NO new Braiins Manager Agent
+# version. The daily agent-update.yml only fires when upstream ships a new
+# agent, so it never ships these; this is the human-triggered path for them.
+#
+# Trigger it from the Actions tab (workflow_dispatch). Two modes:
+#   - version given  → bumps manifest version + releaseNotes + CHANGELOG, so
+#     EXISTING installs get an "Update" badge (Umbrel keys the badge off the
+#     manifest `version`; it must increase). Use e.g. 4.11.1-1 to sit above the
+#     current agent version but below a future upstream 4.11.1.
+#   - version empty  → digest-only re-pin at the current version. NEW installs
+#     pull the rebuilt image; existing installs get NO badge (unchanged version).
+#
+# Like agent-update.yml it opens a PR (built, smoke-tested, pushed, pinned) for
+# a maintainer to merge — nothing ships to users without a human click.
+
+name: wrapper-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 4.11.1-1). Empty = re-pin the digest at the current version (new installs only, no Update badge)."
+        required: false
+        default: ""
+      release_notes:
+        description: "Release notes (Markdown), used when a version is given. Shown in-app and added to CHANGELOG.md."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY_OWNER: ${{ github.repository_owner }}
+      IMAGE: ghcr.io/${{ github.repository_owner }}/braiins-manager-agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version, update manifest + changelog
+        id: rel
+        env:
+          IN_VERSION: ${{ inputs.version }}
+          IN_NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -eu
+          if [ -n "$IN_VERSION" ]; then
+            printf '%s' "$IN_NOTES" > "$RUNNER_TEMP/notes.md"
+            # writes version=<v> to $GITHUB_OUTPUT and fails if unchanged
+            python3 .github/scripts/bump.py release --version "$IN_VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(python3 .github/scripts/bump.py current-version)" >> "$GITHUB_OUTPUT"
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU (arm64)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build amd64 image for smoke test
+        run: docker buildx build --platform linux/amd64 --provenance=false --load --tag smoke-test:local image/
+
+      - name: Smoke test
+        run: |
+          set -eux
+          docker run -d --name smoke -p 18080:8080 --user 1000:1000 --init smoke-test:local
+          sleep 3
+          curl -fs http://localhost:18080/status | grep '"configured": false'
+          curl -fs -X POST --data "agent_id=123e4567-e89b-42d3-a456-426614174000&secret_key=123e4567-e89b-42d3-a456-426614174001" http://localhost:18080/ | grep '"ok": true'
+          sleep 10
+          curl -fs http://localhost:18080/status | grep '"running": true'
+          curl -fs http://localhost:18080/widgets/status | grep '"three-stats"'
+          curl -fs http://localhost:18080/widgets/status | grep '"icon": "plug-connected"'
+          docker logs smoke 2>&1 | tail -5
+          docker rm -f smoke
+
+      - name: Build and push multi-arch image
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --provenance=false \
+            --tag "$IMAGE:${{ steps.rel.outputs.version }}" \
+            --push image/
+
+      - name: Pin multi-arch index digest in compose
+        run: |
+          digest=$(docker buildx imagetools inspect "$IMAGE:${{ steps.rel.outputs.version }}" --format '{{json .Manifest}}' | python3 -c "import json,sys; print(json.load(sys.stdin)['digest'])")
+          python3 .github/scripts/bump.py pin --version "${{ steps.rel.outputs.version }}" --digest "$digest"
+
+      - name: Open release PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: wrapper-release/${{ steps.rel.outputs.version }}
+          commit-message: "Wrapper release ${{ steps.rel.outputs.version }}"
+          title: "Wrapper release ${{ steps.rel.outputs.version }}"
+          body: |
+            Manual wrapper-only release (no new Braiins Manager Agent version).
+
+            Done by this workflow before opening the PR:
+            - image rebuilt from the current `image/` sources (agent binary unchanged) and smoke-tested
+            - multi-arch image pushed to `${{ env.IMAGE }}:${{ steps.rel.outputs.version }}`
+            - compose pinned to the new multi-arch index digest
+            ${{ steps.rel.outputs.bumped == 'true' && '- manifest version + releaseNotes bumped and CHANGELOG.md entry added → existing installs get an Update badge' || '- manifest version unchanged (digest-only re-pin) → only new installs pull this; existing installs get no Update badge' }}
+
+            Review checklist before merging:
+            - [ ] releaseNotes / CHANGELOG entry read sanely
+            - [ ] update an Umbrel from this branch's store and verify the widget + agent reconnect
+          delete-branch: true
