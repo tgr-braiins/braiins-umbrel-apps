@@ -107,7 +107,7 @@ footer { margin-top: 1.5rem; font-size: .75rem; color: var(--gray-60); text-alig
   </form>
   <p id="msg"></p>
 </div>
-<footer>Agent daemon v__VERSION__ &middot; connects to manager.braiins.com</footer>
+<footer>__PKG__Agent daemon v__VERSION__ &middot; connects to manager.braiins.com</footer>
 <script>
 const pill = document.getElementById('pill');
 const pillText = document.getElementById('pill-text');
@@ -172,6 +172,10 @@ def daemon_version():
 
 
 VERSION = None
+# The Umbrel package (wrapper) version, injected by docker-compose.yml and kept
+# in sync with the manifest by bump.py. Distinct from the agent daemon version
+# above: a wrapper-only release bumps this without changing the daemon binary.
+PACKAGE_VERSION = os.environ.get("APP_VERSION", "").strip()
 
 
 def current_agent_id():
@@ -272,9 +276,11 @@ class Handler(BaseHTTPRequestHandler):
         global VERSION
         if VERSION is None:
             VERSION = daemon_version()
+        pkg = f"Umbrel app {html.escape(PACKAGE_VERSION)} &middot; " if PACKAGE_VERSION else ""
         page = (PAGE
                 .replace("__SYMBOL__", BRAIINS_SYMBOL)
                 .replace("__AGENT_ID__", html.escape(current_agent_id()))
+                .replace("__PKG__", pkg)
                 .replace("__VERSION__", html.escape(VERSION)))
         self._send(page.encode(), "text/html; charset=utf-8")
 

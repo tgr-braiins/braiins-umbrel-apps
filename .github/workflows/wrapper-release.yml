@@ -80,7 +80,7 @@ jobs:
       - name: Smoke test
         run: |
           set -eux
-          docker run -d --name smoke -p 18080:8080 --user 1000:1000 --init smoke-test:local
+          docker run -d --name smoke -p 18080:8080 --user 1000:1000 --init -e APP_VERSION=smoke-version smoke-test:local
           sleep 3
           curl -fs http://localhost:18080/status | grep '"configured": false'
           curl -fs -X POST --data "agent_id=123e4567-e89b-42d3-a456-426614174000&secret_key=123e4567-e89b-42d3-a456-426614174001" http://localhost:18080/ | grep '"ok": true'
@@ -88,6 +88,7 @@ jobs:
           curl -fs http://localhost:18080/status | grep '"running": true'
           curl -fs http://localhost:18080/widgets/status | grep '"three-stats"'
           curl -fs http://localhost:18080/widgets/status | grep '"icon": "plug-connected"'
+          curl -fs http://localhost:18080/ | grep 'Umbrel app smoke-version'
           docker logs smoke 2>&1 | tail -5
           docker rm -f smoke
 

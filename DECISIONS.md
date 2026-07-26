@@ -133,6 +133,19 @@ upstream `4.11.1`, so upstream always wins when it ships. Don't fake a whole
 upstream version (e.g. jumping to `4.12.0`); it would collide when that agent
 actually releases.
 
+## The web UI shows two versions
+
+The footer shows both the **Umbrel app (wrapper) version** and the **agent
+daemon version**, because a wrapper release bumps the former without changing
+the latter (`4.11.1-1` packaging the `4.11.0` daemon) — showing only the daemon
+version would leave a user unable to tell which wrapper revision they run. The
+daemon version comes from `bma-daemon --version` (baked in the image). The
+wrapper version can't: the container has no access to the store manifest, so
+`docker-compose.yml` injects it as the `APP_VERSION` env var, which `webui.py`
+reads. `bump.py pin` rewrites `APP_VERSION` alongside the image tag on every
+release, keeping it equal to the manifest `version`. If `APP_VERSION` is unset
+(plain `docker run`, local dev, CI smoke build), the footer just omits it.
+
 ## `--provenance=false` on buildx
 
 BuildKit attaches provenance attestation manifests by default; ghcr's UI lists
