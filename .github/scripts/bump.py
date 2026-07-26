@@ -155,6 +155,10 @@ def pin(version, digest):
     )
     if n != 1:
         sys.exit(f"expected exactly one image line in compose, found {n}")
+    # keep the footer version (webui.py reads APP_VERSION) in sync with the tag
+    t, n = re.subn(r'APP_VERSION: ".*"', f'APP_VERSION: "{version}"', t)
+    if n != 1:
+        sys.exit(f"expected exactly one APP_VERSION line in compose, found {n}")
     COMPOSE.write_text(t)
     print(f"pinned {version}@{digest}")
 
