@@ -54,15 +54,15 @@ widgets:
       type: "three-stats"
       link: ""
       items:
-        - title: "Agent"
+        - icon: "plug-connected"
           text: "Running"
-          subtext: ""
-        - title: "Miners"
+          subtext: "Agent"
+        - icon: "cpu"
           text: "3"
-          subtext: "found"
-        - title: "Telemetry"
+          subtext: "Miners"
+        - icon: "cloud-upload"
           text: "now"
-          subtext: "sent"
+          subtext: "Telemetry"
 
 submitter: Braiins
 submission: ""

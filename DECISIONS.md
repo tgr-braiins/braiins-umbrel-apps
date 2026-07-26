@@ -90,6 +90,19 @@ widget-bearing app declares ≥ 1.1; declaring 1 would let older umbrelOS
 versions install the app with a broken widget. Bump further only when adopting
 newer framework features.
 
+## Widget icons are Tabler slugs, not our own SVGs
+
+umbrelOS renders the home-screen widget itself; the app only returns JSON. A
+`three-stats` item is `{icon, text, subtext}` — there is **no `title` field**
+(an earlier version set `title`, which silently never rendered, and showed no
+icons). `icon` is a [Tabler Icons](https://tabler.io/icons) slug: umbrelOS
+copies `@tabler/icons` (pinned **2.39.0**) to `/generated-tabler-icons/<slug>.svg`
+and serves that, plus four built-in `system-widget-*` icons. An unknown slug
+renders as an empty placeholder box, so a slug must exist *in 2.39.0* — not just
+in the current Tabler set. We use `plug-connected` / `cpu` / `cloud-upload`;
+verify replacements against 2.39.0 before changing them. `text` is the
+emphasized value, `subtext` the muted caption below it.
+
 ## Home-screen widget instead of Docker HEALTHCHECK
 
 umbreld ignores Docker health status entirely (app state is lifecycle-driven —
