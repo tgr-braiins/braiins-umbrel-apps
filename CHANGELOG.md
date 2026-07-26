@@ -13,6 +13,12 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.11.1-1] - 2026-07-26
+
+Home-screen widget refresh: the Umbrel widget now shows an icon for each stat — agent status, miners found, and telemetry — matching umbrelOS's own live-usage widgets.
+
+This is a packaging-only update; the Braiins Manager Agent itself is unchanged at 4.11.0.
+
 ## [4.11.0] - 2026-07-24
 
 The Braiins Manager Agent **4.11.0** release adds support for Auradine Teraflux and minor improvements.
