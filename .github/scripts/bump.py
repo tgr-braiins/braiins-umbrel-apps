@@ -50,7 +50,18 @@ def out(key, value):
 
 
 def parse_version(v):
-    return tuple(int(x) for x in v.split("."))
+    """Order X.Y.Z versions with an optional wrapper suffix ("4.11.1-2").
+    Per semver, a suffixed version sorts *below* the plain release with the
+    same core, so a real upstream 4.11.1 supersedes wrapper 4.11.1-N."""
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:[-+]([0-9A-Za-z.-]+))?", v)
+    if not m:
+        sys.exit(f"unparseable version: {v!r}")
+    major, minor, patch, suffix = m.groups()
+    if suffix is None:
+        pre = (1, 0)
+    else:
+        pre = (0, int(suffix) if suffix.isdigit() else 0)
+    return (int(major), int(minor), int(patch)) + pre
 
 
 def latest_release():
