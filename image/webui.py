@@ -64,8 +64,8 @@ PAGE = """<!doctype html>
   --blue-60: #0f62fe;  --blue-70: #0043ce;
   --red-40: #ff8389;   --red-60: #da1e28;
   --green-40: #42be65; --green-50: #24a148;
+  --violet-80: #4326b3;
   --yellow-30: #f1c21b;
-  --orange-40: #ff832b;
 
   --font-sans: "Braiins Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --font-brand: "Braiins Sans", -apple-system, BlinkMacSystemFont, sans-serif;
@@ -96,6 +96,7 @@ PAGE = """<!doctype html>
   --focus: var(--violet-60);
   --button-primary: var(--violet-60);
   --button-primary-hover: var(--violet-70);
+  --button-primary-active: var(--violet-80);
 }
 @media (prefers-color-scheme: dark) {
   :root { /* Gray 90 theme */
@@ -126,7 +127,7 @@ header { display: flex; align-items: center; gap: var(--spacing-04); margin-bott
   border-radius: 10px; /* app-icon corner ratio (230/1024) at 44px, not a component radius */
   display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .mark svg { width: 22px; height: 22px; }
-h1 { font: 600 16px/1.5 var(--font-brand); letter-spacing: 0; margin: 0; } /* heading-02 */
+h1 { font: 600 16px/1.5 var(--font-brand); letter-spacing: 0; margin: 0; } /* brand-label-lg (heading-02 values, brand family) */
 h1 small { display: block; font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-helper); }
 /* Carbon tile: flat layer fill, sharp corners, no shadow */
 .card { background: var(--layer-01); padding: var(--spacing-05); }
@@ -137,16 +138,16 @@ h1 small { display: block; font: 400 12px/1.3333 var(--font-sans); letter-spacin
   margin-bottom: var(--spacing-05); color: var(--text-secondary); }
 #pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); }
 #pill.running .dot { background: var(--support-success); }
-#pill.starting .dot { background: var(--orange-40); }
+#pill.starting .dot { background: var(--support-warning); }
 #pill.error .dot { background: var(--support-error); }
 p.help { color: var(--text-secondary); margin: 0 0 var(--spacing-05); }
 p.help a { color: var(--link-primary); text-decoration: none; }
 p.help a:hover { color: var(--link-primary-hover); text-decoration: underline; }
-label { display: block; margin: var(--spacing-05) 0 .375rem;
+label { display: block; margin: var(--spacing-05) 0 var(--spacing-03);
   font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
 /* Carbon text input: field fill, bottom hairline, sharp corners */
 input { width: 100%; height: 40px; padding: 0 var(--spacing-05);
-  font: 400 14px/1 var(--font-brand); letter-spacing: .16px;
+  font: 400 14px/1.2857 var(--font-sans); letter-spacing: .16px; /* body-compact-01 */
   background: var(--field-01); color: var(--text-primary);
   border: 0; border-radius: 0; box-shadow: inset 0 -1px 0 0 var(--border-strong); }
 input::placeholder { color: var(--text-placeholder); }
@@ -160,6 +161,7 @@ button { margin-top: var(--spacing-06); height: 48px; min-width: 120px;
   background: var(--button-primary); color: var(--text-on-color);
   transition: background var(--duration-fast-02) var(--ease-productive); }
 button:hover { background: var(--button-primary-hover); }
+button:active { background: var(--button-primary-active); }
 button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px;
   box-shadow: inset 0 0 0 1px var(--text-on-color); }
 #stats { font: 400 14px/1.2857 var(--font-sans); letter-spacing: .16px; /* body-compact-01 */
