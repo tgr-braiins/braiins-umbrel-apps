@@ -22,6 +22,8 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CONFIG = "/data/daemon.yaml"
+FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+FONTS = ("braiinssans-regular.woff2", "braiinssans-bold.woff2")
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
 
 BRAIINS_SYMBOL = (
@@ -36,60 +38,141 @@ PAGE = """<!doctype html>
 <title>Braiins Manager Agent</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'><rect width='1024' height='1024' rx='230' fill='%236B50FF'/><g transform='translate(296 296) scale(.5)'><polygon points='345.6 864 345.6 682.8 194.4 179.9 194.4 0 0 0 0 179.9 151.2 682.8 151.2 864 345.6 864' fill='%23fff'/><polygon points='864 864 864 682.8 712.8 179.9 712.8 0 518.4 0 518.4 179.9 669.6 682.8 669.6 864 864 864' fill='%23fff'/></g></svg>">
 <style>
+/* Braiins CDS v11 (IBM Carbon v11) — token values loaded from the design
+   system mirror (colors_and_type.css + component previews), not invented.
+   Violet-60 primary action and focus ring per the CDS component previews
+   (product decision 2026-07-29; the token file's blue-60 button was
+   overridden). Links follow the CDS link tokens (blue). Semantic
+   tokens re-resolve for light (White) / dark (Gray 90) via
+   prefers-color-scheme; markup is theme-agnostic.
+   Braiins Sans (regular + bold) comes from the visualbook
+   (design.braiins.com/braiins/typography) and is served by this process —
+   no external requests. The visualbook ships 400/700 only, so the Carbon
+   600 (semibold) styles resolve to the bold face. */
+@font-face { font-family: "Braiins Sans"; font-style: normal; font-weight: 400;
+  font-display: swap; src: url(fonts/braiinssans-regular.woff2) format("woff2"); }
+@font-face { font-family: "Braiins Sans"; font-style: normal; font-weight: 700;
+  font-display: swap; src: url(fonts/braiinssans-bold.woff2) format("woff2"); }
 :root {
-  --violet-60: #6B50FF;
-  --violet-70: #5840D9;
+  --violet-60: #6b50ff;
+  --violet-70: #5739e0;
+  --gray-10: #f4f4f4;  --gray-20: #e0e0e0;  --gray-30: #c6c6c6;
+  --gray-40: #a8a8a8;  --gray-50: #8d8d8d;  --gray-60: #6f6f6f;
+  --gray-70: #525252;  --gray-80: #393939;  --gray-90: #262626;
   --gray-100: #161616;
-  --gray-90: #212121;
-  --gray-80: #2e2e2e;
-  --gray-60: #6f6f6f;
-  --gray-30: #c6c6c6;
-  --gray-10: #f4f4f4;
-  --green-50: #13A454;
-  --orange-50: #EB6307;
-  --red-60: #D9222C;
+  --blue-30: #a6c8ff;  --blue-40: #78a9ff;
+  --blue-60: #0f62fe;  --blue-70: #0043ce;
+  --red-40: #ff8389;   --red-60: #da1e28;
+  --green-40: #42be65; --green-50: #24a148;
+  --yellow-30: #f1c21b;
+  --orange-40: #ff832b;
+
+  --font-sans: "Braiins Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-brand: "Braiins Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --spacing-02: .25rem; --spacing-03: .5rem; --spacing-04: .75rem;
+  --spacing-05: 1rem;   --spacing-06: 1.5rem; --spacing-07: 2rem;
+  --spacing-09: 3rem;
+  --radius-pill: 1000px;
+  --duration-fast-02: 110ms;
+  --ease-productive: cubic-bezier(.2, 0, .38, .9);
+
+  /* semantic tokens — White theme */
+  --background: #ffffff;
+  --layer-01: var(--gray-10);
+  --field-01: var(--gray-10);
+  --border-subtle: var(--gray-20);
+  --border-strong: var(--gray-50);
+  --text-primary: var(--gray-100);
+  --text-secondary: var(--gray-70);
+  --text-placeholder: var(--gray-40);
+  --text-helper: var(--gray-60);
+  --text-on-color: #ffffff;
+  --support-error: var(--red-60);
+  --support-success: var(--green-50);
+  --support-warning: var(--yellow-30);
+  --link-primary: var(--blue-60);
+  --link-primary-hover: var(--blue-70);
+  --focus: var(--violet-60);
+  --button-primary: var(--violet-60);
+  --button-primary-hover: var(--violet-70);
+}
+@media (prefers-color-scheme: dark) {
+  :root { /* Gray 90 theme */
+    --background: var(--gray-90);
+    --layer-01: var(--gray-80);
+    --field-01: var(--gray-80);
+    --border-subtle: var(--gray-70);
+    --border-strong: var(--gray-40);
+    --text-primary: var(--gray-10);
+    --text-secondary: var(--gray-30);
+    --text-placeholder: var(--gray-50);
+    --text-helper: var(--gray-40);
+    /* light semantic variants for dark backgrounds */
+    --support-error: var(--red-40);
+    --support-success: var(--green-40);
+    --link-primary: var(--blue-40);
+    --link-primary-hover: var(--blue-30);
+  }
 }
 * { box-sizing: border-box; }
 body {
-  font-family: "Braiins Sans", "IBM Plex Sans", system-ui, sans-serif;
-  background: var(--gray-100); color: var(--gray-10);
-  max-width: 32rem; margin: 0 auto; padding: 3rem 1.25rem;
+  font: 400 14px/1.4286 var(--font-sans); letter-spacing: .16px; /* body-01 */
+  background: var(--background); color: var(--text-primary);
+  max-width: 32rem; margin: 0 auto; padding: var(--spacing-09) var(--spacing-05);
 }
-header { display: flex; align-items: center; gap: .75rem; margin-bottom: 2rem; }
-.mark { background: var(--violet-60); border-radius: 8px; width: 44px; height: 44px;
+header { display: flex; align-items: center; gap: var(--spacing-04); margin-bottom: var(--spacing-07); }
+.mark { background: var(--violet-60); width: 44px; height: 44px;
+  border-radius: 10px; /* app-icon corner ratio (230/1024) at 44px, not a component radius */
   display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .mark svg { width: 22px; height: 22px; }
-h1 { font-size: 1.15rem; font-weight: 600; margin: 0; line-height: 1.3; }
-h1 small { display: block; font-size: .8rem; font-weight: 400; color: var(--gray-60); }
-.card { background: var(--gray-90); border: 1px solid var(--gray-80); border-radius: 12px; padding: 1.5rem; }
-#pill { display: inline-flex; align-items: center; gap: .5rem; font-size: .85rem;
-  padding: .35rem .8rem; border-radius: 999px; margin-bottom: 1.25rem;
-  background: var(--gray-80); color: var(--gray-30); }
-#pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gray-60); }
-#pill.running .dot { background: var(--green-50); box-shadow: 0 0 6px var(--green-50); }
-#pill.starting .dot { background: var(--orange-50); }
-#pill.error .dot { background: var(--red-60); }
-p.help { font-size: .875rem; color: var(--gray-30); margin: 0 0 1.25rem; line-height: 1.5; }
-p.help a { color: var(--violet-60); text-decoration: none; }
-p.help a:hover { text-decoration: underline; }
-label { display: block; margin: 1rem 0 .35rem; font-size: .8rem; font-weight: 600;
-  letter-spacing: .02em; color: var(--gray-30); }
-input { width: 100%; padding: .65rem .75rem; font-size: .9rem;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  background: var(--gray-100); color: var(--gray-10);
-  border: 1px solid var(--gray-80); border-radius: 8px; }
-input:focus { outline: none; border-color: var(--violet-60); }
-button { margin-top: 1.5rem; width: 100%; padding: .75rem; font-size: .95rem; font-weight: 600;
-  font-family: inherit; border: 0; border-radius: 8px;
-  background: var(--violet-60); color: #fff; cursor: pointer; }
-button:hover { background: var(--violet-70); }
-#stats { font-size: .85rem; color: var(--gray-30); margin: -.5rem 0 1rem; line-height: 1.6; }
-#stats .num { color: var(--gray-10); font-weight: 600; }
-#stats .err { color: var(--orange-50); display: block; font-size: .8rem; }
-#msg { font-size: .85rem; margin: 1rem 0 0; min-height: 1.2em; }
-#msg.ok { color: var(--green-50); }
-#msg.err { color: var(--red-60); }
-footer { margin-top: 1.5rem; font-size: .75rem; color: var(--gray-60); text-align: center; }
+h1 { font: 600 16px/1.5 var(--font-brand); letter-spacing: 0; margin: 0; } /* heading-02 */
+h1 small { display: block; font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-helper); }
+/* Carbon tile: flat layer fill, sharp corners, no shadow */
+.card { background: var(--layer-01); padding: var(--spacing-05); }
+#pill { display: inline-flex; align-items: center; gap: var(--spacing-03);
+  font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px;
+  padding: var(--spacing-02) var(--spacing-04); border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  margin-bottom: var(--spacing-05); color: var(--text-secondary); }
+#pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); }
+#pill.running .dot { background: var(--support-success); }
+#pill.starting .dot { background: var(--orange-40); }
+#pill.error .dot { background: var(--support-error); }
+p.help { color: var(--text-secondary); margin: 0 0 var(--spacing-05); }
+p.help a { color: var(--link-primary); text-decoration: none; }
+p.help a:hover { color: var(--link-primary-hover); text-decoration: underline; }
+label { display: block; margin: var(--spacing-05) 0 .375rem;
+  font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
+/* Carbon text input: field fill, bottom hairline, sharp corners */
+input { width: 100%; height: 40px; padding: 0 var(--spacing-05);
+  font: 400 14px/1 var(--font-brand); letter-spacing: .16px;
+  background: var(--field-01); color: var(--text-primary);
+  border: 0; border-radius: 0; box-shadow: inset 0 -1px 0 0 var(--border-strong); }
+input::placeholder { color: var(--text-placeholder); }
+input:focus { outline: 2px solid var(--focus); outline-offset: -2px; }
+/* Carbon primary button, 48px, left-aligned label */
+button { margin-top: var(--spacing-06); height: 48px; min-width: 120px;
+  padding: 0 64px 0 var(--spacing-05); text-align: left;
+  display: inline-flex; align-items: center;
+  font: 400 14px/1 var(--font-brand); letter-spacing: .16px;
+  appearance: none; border: 0; border-radius: 0; cursor: pointer;
+  background: var(--button-primary); color: var(--text-on-color);
+  transition: background var(--duration-fast-02) var(--ease-productive); }
+button:hover { background: var(--button-primary-hover); }
+button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px var(--text-on-color); }
+#stats { font: 400 14px/1.2857 var(--font-sans); letter-spacing: .16px; /* body-compact-01 */
+  color: var(--text-secondary); margin: 0 0 var(--spacing-05); }
+#stats .num { color: var(--text-primary); font-weight: 600; }
+#stats .err { display: block; margin-top: var(--spacing-02);
+  border-left: 3px solid var(--support-warning); padding-left: var(--spacing-03);
+  font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
+#msg { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; margin: var(--spacing-05) 0 0; min-height: 1.2em; }
+#msg.ok { color: var(--support-success); }
+#msg.err { color: var(--support-error); }
+footer { margin-top: var(--spacing-06); font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px;
+  color: var(--text-helper); text-align: center; }
 </style></head><body>
 <header>
   <div class="mark">__SYMBOL__</div>
@@ -131,7 +214,7 @@ function renderStats(s) {
   // Surface errors only if nothing was successfully sent since
   if (s.last_error && (!s.last_sent || Date.parse(s.last_error.ts) > Date.parse(s.last_sent))) {
     const msg = s.last_error.msg.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    html += `<span class="err">⚠ ${msg}</span>`;
+    html += `<span class="err">Warning: ${msg}</span>`;
   }
   stats.innerHTML = html;
 }
@@ -257,16 +340,24 @@ def widget_status():
 
 
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, body, ctype):
+    def _send(self, body, ctype, cache="no-store"):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache)
         self.end_headers()
         self.wfile.write(body)
 
     def do_GET(self):
         path = self.path.split("?")[0]
+        name = path.rsplit("/", 1)[-1]
+        if "/fonts/" in path and name in FONTS:
+            try:
+                with open(os.path.join(FONTS_DIR, name), "rb") as f:
+                    self._send(f.read(), "font/woff2", cache="public, max-age=604800")
+            except OSError:
+                self.send_error(404)
+            return
         if path.endswith("/widgets/status"):
             self._send(json.dumps(widget_status()).encode(), "application/json")
             return
