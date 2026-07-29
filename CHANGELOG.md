@@ -13,6 +13,10 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.11.1-4] - 2026-07-29
+
+Setup page restyled to the Braiins design system: light and dark themes (follows your device setting), Braiins Sans now bundled with the app. The page makes no external requests.
+
 ## [4.11.1-3] - 2026-07-29
 
 The app's settings page now shows the Braiins icon in the browser tab (favicon).

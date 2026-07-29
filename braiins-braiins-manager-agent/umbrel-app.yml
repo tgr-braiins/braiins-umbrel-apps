@@ -2,7 +2,7 @@ manifestVersion: 1.1
 id: braiins-braiins-manager-agent
 category: bitcoin
 name: Braiins Manager Agent
-version: "4.11.1-3"
+version: "4.11.1-4"
 tagline: Connect the miners on your local network to Braiins Manager
 description: >-
   Braiins Manager Agent connects mining devices on your local network to
@@ -16,9 +16,7 @@ description: >-
   Braiins Manager to obtain an Agent ID and Secret key, then paste them into
   this app's settings page.
 releaseNotes: |-
-  The app's settings page now shows the Braiins icon in the browser tab (favicon).
-
-  Packaging-only update; the Braiins Manager Agent itself is unchanged at 4.11.0.
+  Setup page restyled to the Braiins design system: light and dark themes (follows your device setting), Braiins Sans now bundled with the app. The page makes no external requests.
 
 developer: Braiins
 website: https://braiins.com/manager
