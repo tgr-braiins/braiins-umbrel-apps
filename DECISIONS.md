@@ -167,3 +167,18 @@ package scaffolding (owned by uid 1000 via umbreld), config is rendered by the
 web UI at runtime, and there are no migrations. Add hooks only for real
 existing-install migrations (see the official `umbrel-package-app` skill for
 hook semantics), not for scaffolding compose/templates can express.
+
+## Web UI styling: Braiins CDS v11 tokens, fonts served locally
+
+The setup page uses Braiins CDS v11 (IBM Carbon v11) color/type/spacing token
+values, hand-inlined into `webui.py` — no CSS framework, the page is one file.
+Semantic tokens re-resolve between the White and Gray 90 themes via
+`prefers-color-scheme`. The primary action is violet-60 (brand), a deliberate
+override of the token file's blue-60 button. Braiins Sans (regular + bold
+WOFF2, converted from the public visualbook OTFs at
+design.braiins.com/braiins/typography) is committed under `image/fonts/`,
+baked into the image, and served by `webui.py` itself: an Umbrel box must not
+depend on a Braiins web host to render its local setup page, and phoning an
+external CDN from a self-hosted node is exactly what Umbrel users install
+apps to avoid. Revisit only if the visualbook adds a semibold (the Carbon
+600-weight styles currently resolve to bold) or the token values change.

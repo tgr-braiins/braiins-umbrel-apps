@@ -25,6 +25,8 @@ RUN apk add --no-cache ca-certificates python3
 
 COPY --from=fetch /bma-daemon /usr/bin/bma-daemon
 COPY webui.py /usr/lib/bma/webui.py
+# Braiins Sans (WOFF2, from design.braiins.com/braiins/typography), served by webui.py
+COPY fonts/ /usr/lib/bma/fonts/
 COPY entrypoint.sh /usr/lib/bma/entrypoint.sh
 RUN chmod 0755 /usr/lib/bma/entrypoint.sh \
     # the daemon logs to this hardcoded path; pre-create it writable for uid 1000
