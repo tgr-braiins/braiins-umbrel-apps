@@ -5,6 +5,10 @@ Umbrel community app store for [Braiins](https://braiins.com) apps, currently:
 - **Braiins Manager Agent** — connects mining devices on your local network to
   [Braiins Manager](https://manager.braiins.com), Braiins' fleet-management
   platform.
+- **Braiins Toolbox** — [Braiins Toolbox](https://braiins.com/toolbox) with its
+  own web GUI: scan your network for ASIC miners, monitor them live, and
+  batch-manage pools, power modes, and Braiins OS installs — fully local, no
+  cloud account.
 
 > **Status: test/preview.** This store lives on a personal account while we
 > finalize hosting under a Braiins-owned organization. Expect the store URL and
@@ -28,14 +32,36 @@ Design rationale — why the package is built the way it is — lives in
 ## Repo layout
 
 - `umbrel-app-store.yml` — store manifest (store id `braiins`)
-- `braiins-braiins-manager-agent/` — the Umbrel app: manifest
+- `braiins-braiins-manager-agent/` — the Braiins Manager Agent app: manifest
   (`umbrel-app.yml`), `docker-compose.yml`, `icon.svg`
-- `image/` — source of the Docker image
+- `image/` — source of the agent Docker image
   (`ghcr.io/tgr-braiins/braiins-manager-agent`)
-- `CHANGELOG.md` — per-version release notes history (the manifest's
+- `braiins-braiins-toolbox/` — the Braiins Toolbox app
+- `image-braiins-toolbox/` — source of the Toolbox Docker image
+  (`ghcr.io/tgr-braiins/braiins-toolbox`)
+- `CHANGELOG.md` — Braiins Manager Agent release notes history (the manifest's
   `releaseNotes` only holds the current version)
 
-## How the image works
+## How the Toolbox image works
+
+`image-braiins-toolbox/` packages the official closed-source Braiins Toolbox
+binary, unmodified: the Dockerfile downloads the release tarball from the
+public feed (`https://downloads.braiins.com/braiins-toolbox/index.json`),
+verifies its sha256 against the feed's published checksum, and runs it with
+`--gui-listen-address 0.0.0.0:8888` — the Toolbox GUI is upstream's own
+embedded web server, so unlike the agent app there is no wrapper UI, no
+entrypoint script, and no glue code. The binary is statically linked; the
+Alpine base exists only for `ca-certificates` (BOS firmware downloads and
+release feed checks). All state (device list IP sources, pool presets, logs)
+lives under `$HOME`, which the image sets to the `/data` volume.
+
+Build, push, and release mechanics are the same as for the agent image below
+(multi-arch buildx, public ghcr package, digest pinned in compose), except
+version bumps are currently manual — bump `TOOLBOX_VERSION` + the two
+checksums in the Dockerfile (both from the feed), rebuild/push, pin the new
+digest, bump the manifest `version`.
+
+## How the agent image works
 
 The image does **not** build the agent from source. It downloads the official
 signed release `.deb` from the public feed

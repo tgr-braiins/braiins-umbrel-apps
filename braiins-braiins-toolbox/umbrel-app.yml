@@ -1,0 +1,44 @@
+manifestVersion: 1
+id: braiins-braiins-toolbox
+category: bitcoin
+name: Braiins Toolbox
+version: "26.06"
+tagline: Scan, monitor, and batch-manage your ASIC miners
+description: >-
+  Braiins Toolbox is Braiins' tool for managing ASIC miners at scale, running
+  entirely on your local network — no cloud account needed.
+
+
+  Scan IP ranges to discover miners (Antminer, Whatsminer, Avalon, Iceriver,
+  and Braiins devices), watch live hashrate, temperatures, fan speeds, and
+  pool status in the Device List, and manage devices in batch: install or
+  update Braiins OS, configure pools and workers, set power modes and tuner
+  targets, manage cooling, and reboot devices.
+
+
+  To get started, open the app and scan your miners' IP range from the Device
+  List. Monitoring is read-only; management actions are always explicit —
+  nothing is changed on your miners unless you trigger it.
+releaseNotes: ""
+
+developer: Braiins
+website: https://braiins.com/toolbox
+dependencies: []
+repo: https://github.com/tgr-braiins/braiins-umbrel-apps
+support: https://academy.braiins.com/braiins-toolbox
+
+port: 4548
+icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-toolbox/icon.svg
+gallery:
+  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-toolbox/gallery/1.png
+  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-toolbox/gallery/2.png
+path: ""
+
+defaultUsername: ""
+defaultPassword: ""
+
+backupIgnore:
+  - data/.local/share/braiins-toolbox/logs/*
+
+submitter: Braiins
+submission: ""
