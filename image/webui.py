@@ -34,6 +34,7 @@ BRAIINS_SYMBOL = (
 PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Braiins Manager Agent</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'><rect width='1024' height='1024' rx='230' fill='%236B50FF'/><g transform='translate(296 296) scale(.5)'><polygon points='345.6 864 345.6 682.8 194.4 179.9 194.4 0 0 0 0 179.9 151.2 682.8 151.2 864 345.6 864' fill='%23fff'/><polygon points='864 864 864 682.8 712.8 179.9 712.8 0 518.4 0 518.4 179.9 669.6 682.8 669.6 864 864 864' fill='%23fff'/></g></svg>">
 <style>
 :root {
   --violet-60: #6B50FF;
