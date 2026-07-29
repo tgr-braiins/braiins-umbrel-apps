@@ -13,6 +13,10 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.11.1-5] - 2026-07-29
+
+Design polish on the setup page: standard text style in the input fields, button press feedback, corrected spacing and status colors per the Braiins design system.
+
 ## [4.11.1-4] - 2026-07-29
 
 Setup page restyled to the Braiins design system: light and dark themes (follows your device setting), Braiins Sans now bundled with the app. The page makes no external requests.
