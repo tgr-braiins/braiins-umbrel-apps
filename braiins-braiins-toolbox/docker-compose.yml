@@ -1,0 +1,17 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: braiins-braiins-toolbox_web_1
+      APP_PORT: 8888
+
+  web:
+    # TODO: move to a Braiins-owned registry before official-store submission
+    image: ghcr.io/tgr-braiins/braiins-toolbox:26.06@sha256:2acba5d36b07d46373dbd6bf764dd33d499c7975a51556ceea68af20a4bc4b28
+    user: "1000:1000"
+    init: true
+    restart: on-failure
+    stop_grace_period: 30s
+    volumes:
+      - ${APP_DATA_DIR}/data:/data

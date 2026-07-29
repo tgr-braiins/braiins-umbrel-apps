@@ -3,6 +3,9 @@
 Short rationale for everything that might otherwise earn a "wtf, why?".
 Format: what we did → why → when to revisit.
 
+Sections below cover the **Braiins Manager Agent** package unless titled
+otherwise; **Braiins Toolbox** decisions are at the end.
+
 ## Packaging from the release `.deb`, not from source
 
 The image downloads the official signed `.deb` from the public feed and
@@ -183,3 +186,69 @@ depend on a Braiins web host to render its local setup page, and phoning an
 external CDN from a self-hosted node is exactly what Umbrel users install
 apps to avoid. Revisit only if the visualbook adds a semibold (the Carbon
 600-weight styles currently resolve to bold) or the token values change.
+
+---
+
+# Braiins Toolbox package
+
+## The official binary, unmodified — no wrapper, no entrypoint script
+
+Unlike the agent, Toolbox needs zero glue: its GUI *is* an embedded web
+server (`--gui-listen-address`), so the container entrypoint is the binary
+itself. The tarball comes from the same public feed pattern as the agent
+`.deb` (`downloads.braiins.com/braiins-toolbox/index.json`), sha256-verified
+against the feed's published checksum. The binary is statically linked
+(static-pie); Alpine is there only for `ca-certificates` (BOS firmware
+downloads during installs, release feed checks). Anyone can rebuild the image
+from public artifacts alone; this repo never contains Toolbox code.
+
+## `HOME=/data` instead of per-path flags
+
+Every Toolbox state path (GUI config with saved IP sources, pool presets,
+logs, install UUID) resolves via XDG defaults under `$HOME`. Setting
+`HOME=/data` persists all of it through one volume and stays correct if a new
+Toolbox version adds more state files — safer than enumerating
+`--gui-config-path`/`--pool-presets-file-path`/`--logfile-path` flags and
+missing a new one later. Logs are excluded from Umbrel backups via
+`backupIgnore` (`data/.local/share/braiins-toolbox/logs/*`).
+
+## Port 4548
+
+Same platform constraint as the agent's 4547 (static host-port claim, no
+conflict detection). Toolbox's native 8888 is already taken in the official
+store, so the app claims 4548 — adjacent to the agent's 4547 (checked
+unclaimed in the official store 2026-07-29). `APP_PORT: 8888` in compose is
+container-internal. Don't change 4548 after release.
+
+## No home-screen widget (yet)
+
+The GUI's internal HTTP API is undocumented and unversioned, and there is no
+local status endpoint contract like the one requested for the agent. A widget
+scraping undocumented GUI endpoints would break silently on any Toolbox
+release. Add one when Toolbox exposes a stable local status endpoint.
+
+## No Toolbox self-update inside the container
+
+Toolbox checks the release feed and logs "toolbox is up to date" (or offers a
+self-update). The binary lives at `/usr/bin/braiins-toolbox` owned by root
+while the process runs as uid 1000, so a self-update cannot apply — by
+design. Updates flow exclusively through Umbrel app updates: bump
+`TOOLBOX_VERSION` + checksums in the Dockerfile, push the image, pin the
+digest, bump the manifest `version`.
+
+## Unauthenticated GUI on the shared Docker network (accepted, pre-GA item)
+
+Same risk class as the agent's `web:8080`, with a bigger blast radius:
+`web:8888` has no auth of its own, and app_proxy only covers the browser
+path, so a malicious co-installed app could drive the GUI's API — and Toolbox
+can reconfigure and reflash every miner on the LAN. Umbrel's threat model
+(apps on one shared network are mutually trusted) accepts this today; a GUI
+auth option in the Toolbox product is the right fix. Do not "fix" it here by
+publishing raw ports or disabling app_proxy auth — those only widen exposure.
+
+## Miner passwords
+
+Toolbox prompts for non-default miner passwords in the GUI per session/action
+(`-p` on the CLI); it does not persist credentials to disk in the current
+setup. Nothing password-shaped lands in `/data` — if a future version adds a
+credential store, revisit backup and permissions handling then.
