@@ -173,8 +173,9 @@ hook semantics), not for scaffolding compose/templates can express.
 The setup page uses Braiins CDS v11 (IBM Carbon v11) color/type/spacing token
 values, hand-inlined into `webui.py` — no CSS framework, the page is one file.
 Semantic tokens re-resolve between the White and Gray 90 themes via
-`prefers-color-scheme`. The primary action is violet-60 (brand), a deliberate
-override of the token file's blue-60 button. Braiins Sans (regular + bold
+`prefers-color-scheme`. The primary action and focus ring are violet-60
+(brand), a deliberate override of the token file's blue-60; links keep the
+CDS blue link tokens. Braiins Sans (regular + bold
 WOFF2, converted from the public visualbook OTFs at
 design.braiins.com/braiins/typography) is committed under `image/fonts/`,
 baked into the image, and served by `webui.py` itself: an Umbrel box must not

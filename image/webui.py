@@ -40,8 +40,9 @@ PAGE = """<!doctype html>
 <style>
 /* Braiins CDS v11 (IBM Carbon v11) — token values loaded from the design
    system mirror (colors_and_type.css + component previews), not invented.
-   Violet-60 primary action per the CDS component previews (product decision
-   2026-07-29; the token file's blue-60 button was overridden). Semantic
+   Violet-60 primary action and focus ring per the CDS component previews
+   (product decision 2026-07-29; the token file's blue-60 button was
+   overridden). Links follow the CDS link tokens (blue). Semantic
    tokens re-resolve for light (White) / dark (Gray 90) via
    prefers-color-scheme; markup is theme-agnostic.
    Braiins Sans (regular + bold) comes from the visualbook
@@ -59,6 +60,8 @@ PAGE = """<!doctype html>
   --gray-40: #a8a8a8;  --gray-50: #8d8d8d;  --gray-60: #6f6f6f;
   --gray-70: #525252;  --gray-80: #393939;  --gray-90: #262626;
   --gray-100: #161616;
+  --blue-30: #a6c8ff;  --blue-40: #78a9ff;
+  --blue-60: #0f62fe;  --blue-70: #0043ce;
   --red-40: #ff8389;   --red-60: #da1e28;
   --green-40: #42be65; --green-50: #24a148;
   --yellow-30: #f1c21b;
@@ -88,6 +91,8 @@ PAGE = """<!doctype html>
   --support-error: var(--red-60);
   --support-success: var(--green-50);
   --support-warning: var(--yellow-30);
+  --link-primary: var(--blue-60);
+  --link-primary-hover: var(--blue-70);
   --focus: var(--violet-60);
   --button-primary: var(--violet-60);
   --button-primary-hover: var(--violet-70);
@@ -106,6 +111,8 @@ PAGE = """<!doctype html>
     /* light semantic variants for dark backgrounds */
     --support-error: var(--red-40);
     --support-success: var(--green-40);
+    --link-primary: var(--blue-40);
+    --link-primary-hover: var(--blue-30);
   }
 }
 * { box-sizing: border-box; }
@@ -133,8 +140,8 @@ h1 small { display: block; font: 400 12px/1.3333 var(--font-sans); letter-spacin
 #pill.starting .dot { background: var(--orange-40); }
 #pill.error .dot { background: var(--support-error); }
 p.help { color: var(--text-secondary); margin: 0 0 var(--spacing-05); }
-p.help a { color: var(--violet-60); text-decoration: none; }
-p.help a:hover { text-decoration: underline; }
+p.help a { color: var(--link-primary); text-decoration: none; }
+p.help a:hover { color: var(--link-primary-hover); text-decoration: underline; }
 label { display: block; margin: var(--spacing-05) 0 .375rem;
   font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
 /* Carbon text input: field fill, bottom hairline, sharp corners */
