@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.3.0] - 2026-07-30
+
+Exact projected retarget time, fees-inclusive hashvalue by default, bare-integer hashvalue column, longest wait without a new difficulty ATH, implied hashrate in the annual view, and separate Annual/Monthly navigation.
+
 ## [1.2.0] - 2026-07-30
 
 Halving countdown tile and home-screen widget, fee-aware hashvalue from your node's current-epoch fees, all-time adjustment records and streaks, CAGR and doubling time, trailing-growth projections, chart PNG export, API documentation at /api, and in-page navigation.
