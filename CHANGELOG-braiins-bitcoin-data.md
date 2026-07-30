@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.1.0] - 2026-07-30
+
+Hashvalue for 1 PH/s (tile, epoch table, exports), click-to-copy exact difficulty values, a by-year table with YTD, and a year-by-month difficulty change grid.
+
 ## [1.0.0] - 2026-07-30
 
 Initial release: difficulty epoch analytics from your own Bitcoin node —
