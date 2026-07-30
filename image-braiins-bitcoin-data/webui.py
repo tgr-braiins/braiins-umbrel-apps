@@ -51,7 +51,7 @@ class RpcError(Exception):
 
 def rpc(method, params=()):
     url = "http://%s:%s/" % (RPC_HOST, RPC_PORT)
-    body = json.dumps({"jsonrpc": "1.0", "id": "bitcoin-data", "method": method,
+    body = json.dumps({"jsonrpc": "1.0", "id": "braiins-bitcoin-data", "method": method,
                        "params": list(params)}).encode()
     req = urllib.request.Request(url, data=body, headers={
         "Content-Type": "application/json",

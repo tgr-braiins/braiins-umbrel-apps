@@ -1,5 +1,5 @@
 manifestVersion: 1.1
-id: bitcoin-data
+id: braiins-bitcoin-data
 category: bitcoin
 name: Bitcoin Data
 version: "1.0.0"
@@ -26,10 +26,10 @@ dependencies:
 repo: https://github.com/tgr-braiins/braiins-umbrel-apps
 support: https://github.com/tgr-braiins/braiins-umbrel-apps/issues
 port: 4549
-icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/bitcoin-data/icon.svg
+icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-bitcoin-data/icon.svg
 gallery:
-  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/bitcoin-data/gallery/1.png
-  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/bitcoin-data/gallery/2.png
+  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-bitcoin-data/gallery/1.png
+  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-bitcoin-data/gallery/2.png
 path: ""
 defaultUsername: ""
 defaultPassword: ""

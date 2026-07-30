@@ -43,13 +43,13 @@ Design rationale — why the package is built the way it is — lives in
 - `braiins-toolbox/` — the Braiins Toolbox app
 - `image-braiins-toolbox/` — source of the Toolbox Docker image
   (`ghcr.io/tgr-braiins/braiins-toolbox`)
-- `bitcoin-data/` — the Bitcoin Data app
-- `image-bitcoin-data/` — source of the Bitcoin Data Docker image
-  (`ghcr.io/tgr-braiins/bitcoin-data`); the app has no upstream binary — the
+- `braiins-bitcoin-data/` — the Bitcoin Data app
+- `image-braiins-bitcoin-data/` — source of the Bitcoin Data Docker image
+  (`ghcr.io/tgr-braiins/braiins-bitcoin-data`); the app has no upstream binary — the
   whole app is `webui.py` (run it locally with `DEMO_MODE=1` for synthetic
   data, no node needed)
 - `CHANGELOG-braiins-manager-agent.md`, `CHANGELOG-braiins-toolbox.md`,
-  `CHANGELOG-bitcoin-data.md` — per-app release-notes history (each
+  `CHANGELOG-braiins-bitcoin-data.md` — per-app release-notes history (each
   manifest's `releaseNotes` only holds the current version)
 
 ## How the Toolbox image works

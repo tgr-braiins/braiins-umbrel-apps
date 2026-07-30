@@ -2,9 +2,9 @@
 
 Notable changes to the **Bitcoin Data** Umbrel app, newest first. Unlike the
 other apps in this store, Bitcoin Data has no upstream binary — the app is this
-repo's `image-bitcoin-data/webui.py` — so the version is plain semver
-(`version` in `bitcoin-data/umbrel-app.yml`), bumped by the
-[`bitcoin-data-release`](.github/workflows/bitcoin-data-release.yml) workflow.
+repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
+(`version` in `braiins-bitcoin-data/umbrel-app.yml`), bumped by the
+[`braiins-bitcoin-data-release`](.github/workflows/braiins-bitcoin-data-release.yml) workflow.
 
 <!-- new entries are inserted directly below this line -->
 
