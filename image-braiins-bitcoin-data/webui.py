@@ -43,6 +43,17 @@ FONTS = ("braiinssans-regular.woff2", "braiinssans-bold.woff2")
 EPOCH_BLOCKS = 2016
 TARGET_INTERVAL = 600  # seconds per block the retarget aims for
 TWO32 = 2 ** 32
+HALVING_BLOCKS = 210000
+
+
+def subsidy_btc(height):
+    return 50 / 2 ** (height // HALVING_BLOCKS)
+
+
+def hashvalue_sats(difficulty, height):
+    """Expected subsidy earnings of 1 PH/s in sats/day (fees excluded)."""
+    blocks_per_day = 1e15 * 86400 / (difficulty * TWO32)
+    return blocks_per_day * subsidy_btc(height) * 1e8
 
 
 class RpcError(Exception):
@@ -194,6 +205,7 @@ def build_rows(state):
         change = (difficulty / prev_diff - 1) if prev_diff else None
         row = {"epoch": i, "start_height": height, "start_time": start_time,
                "difficulty": difficulty, "change": change,
+               "hashvalue": hashvalue_sats(difficulty, height),
                "end_time": None, "blocks": None, "avg_interval": None,
                "hashrate": None, "current": False}
         if i + 1 < len(b):
@@ -249,6 +261,8 @@ def build_summary(state, rows):
         "avg_interval": avg, "hashrate": cur["hashrate"],
         "projected_change": projected,
         "eta": tip[1] + remaining * (avg or TARGET_INTERVAL),
+        "hashvalue": hashvalue_sats(cur["difficulty"], tip[0]),
+        "subsidy": subsidy_btc(tip[0]),
     })
     closed = [r for r in rows if r["change"] is not None and not r["current"]]
     if closed:
@@ -286,6 +300,7 @@ def export_rows(rows):
             "difficulty": r["difficulty"],
             "change_pct": round(r["change"] * 100, 4) if r["change"] is not None else None,
             "est_hashrate_hs": ("%.4g" % r["hashrate"]) if r["hashrate"] else None,
+            "hashvalue_sats_per_phs_day": round(r["hashvalue"], 1),
             "in_progress": r["current"],
         })
     return out
@@ -294,7 +309,7 @@ def export_rows(rows):
 def export_csv(rows):
     cols = ["epoch", "start_height", "start_time_utc", "end_time_utc", "blocks",
             "avg_block_interval_s", "difficulty", "change_pct",
-            "est_hashrate_hs", "in_progress"]
+            "est_hashrate_hs", "hashvalue_sats_per_phs_day", "in_progress"]
     lines = [",".join(cols)]
     for r in export_rows(rows):
         lines.append(",".join("" if r[c] is None else str(r[c]) for c in cols))
@@ -459,8 +474,7 @@ h2 { font: 400 28px/1.29 var(--font-sans); letter-spacing: 0; margin: 0; }
 #pill.demo .dot { background: var(--violet-60); }
 
 /* Stat tiles: flat layer fill, sharp corners, no shadow */
-.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-bottom: var(--spacing-06); }
-@media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; margin-bottom: var(--spacing-06); }
 @media (max-width: 480px) { .tiles { grid-template-columns: 1fr; } }
 .tile { background: var(--layer-01); padding: var(--spacing-05); min-height: 120px; }
 .tile .label { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
@@ -472,6 +486,15 @@ h2 { font: 400 28px/1.29 var(--font-sans); letter-spacing: 0; margin: 0; }
 .dirdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .dirdot.up { background: var(--data-pos); }
 .dirdot.down { background: var(--data-neg); }
+/* click-to-copy: exact values in mono, tooltips enhance, copy never gated */
+.copyline { display: inline-block; font: 400 12px/1.3333 var(--font-mono);
+  letter-spacing: 0; color: var(--text-secondary); cursor: pointer;
+  border-bottom: 1px dotted var(--border-strong); margin-top: var(--spacing-02);
+  font-variant-numeric: tabular-nums; }
+.copyline:hover { color: var(--link-primary); border-bottom-color: var(--link-primary); }
+.copyline:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+td.copyable { cursor: pointer; }
+td.copyable:hover { text-decoration: underline dotted var(--border-strong); }
 .meter { height: 8px; background: var(--meter-track); margin: var(--spacing-03) 0 var(--spacing-03); }
 .meter i { display: block; height: 100%; background: var(--data-pos);
   transition: width var(--duration-fast-02) var(--ease-productive); }
@@ -543,6 +566,10 @@ tbody td .dirdot { display: inline-block; margin-right: 6px; }
 .ghost:hover { background: var(--layer-hover); color: var(--link-primary-hover); }
 .ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
+/* calendar: year rows x month columns, diverging tint behind text-token values */
+.cal td, .cal th { height: 36px; padding: 0 var(--spacing-04); }
+.cal td { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; }
+.cal td.empty { color: var(--text-helper); background: var(--table-row); }
 .note { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-helper);
   margin: var(--spacing-03) 0 0; }
 footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
@@ -563,6 +590,8 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
     <div class="tile"><div class="label">Difficulty</div>
       <div class="value" id="t-diff">—</div>
       <div class="delta" id="t-diff-delta"></div>
+      <span class="copyline" id="t-diff-full" role="button" tabindex="0"
+        title="Click to copy the exact value"></span>
       <div class="sub" id="t-diff-sub"></div></div>
     <div class="tile"><div class="label">Next adjustment (projected)</div>
       <div class="value" id="t-proj">—</div>
@@ -574,6 +603,27 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
     <div class="tile"><div class="label">Est. network hashrate</div>
       <div class="value" id="t-hash">—</div>
       <div class="sub" id="t-hash-sub">current epoch average</div></div>
+    <div class="tile"><div class="label">Hashvalue (1 PH/s)</div>
+      <div class="value" id="t-hv">—<small>sats/day</small></div>
+      <div class="sub" id="t-hv-sub">subsidy only, fees excluded</div></div>
+  </div>
+
+  <div class="card">
+    <div class="cardhead"><h3>By year</h3></div>
+    <div class="tablewrap"><table id="years">
+      <thead><tr><th>Year</th><th>Difficulty on Jan 1</th><th>Exact value</th><th>Change over year</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p class="note">Difficulty in effect at 00:00 UTC on Jan 1. The current year shows year-to-date. Click an exact value to copy it.</p>
+  </div>
+
+  <div class="card">
+    <div class="cardhead"><h3>Monthly change</h3>
+      <span class="key"><span><i class="pos"></i>Increase</span><span><i class="neg"></i>Decrease</span></span></div>
+    <div class="tablewrap"><table id="months" class="cal">
+      <thead><tr></tr></thead><tbody></tbody>
+    </table></div>
+    <p class="note">Difficulty change from the first to the last moment of each month (UTC). * = month to date.</p>
   </div>
 
   <div class="filters">
@@ -655,6 +705,39 @@ function ago(ts) {
   if (s < 5400) return Math.round(s / 60) + " min ago";
   return Math.round(s / 3600) + " h ago";
 }
+function fmtFullInt(x) { return x == null ? "—" : Math.round(x).toLocaleString("en-US"); }
+
+// navigator.clipboard needs a secure context; umbrel.local is plain http,
+// so fall back to a temporary textarea + execCommand there.
+function copyText(text, el) {
+  const done = () => {
+    if (!el) return;
+    const orig = el.dataset.copyOrig || el.textContent;
+    el.dataset.copyOrig = orig;
+    el.textContent = "Copied";
+    setTimeout(() => { el.textContent = orig; }, 1200);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done);
+  } else {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); done(); } finally { ta.remove(); }
+  }
+}
+
+// difficulty in effect at unix time t (last epoch starting at or before t)
+function diffAt(t) {
+  const rows = S.rows;
+  if (!rows.length || t < rows[0].start_time) return null;
+  let lo = 0, hi = rows.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (rows[mid].start_time <= t) lo = mid; else hi = mid - 1;
+  }
+  return rows[lo].difficulty;
+}
 
 // -- data ---------------------------------------------------------------------
 async function fetchAll() {
@@ -710,6 +793,90 @@ function renderTiles() {
   set("t-hash", fmtHash(s.hashrate));
   set("t-hash-sub", s.avg_interval != null
     ? "avg block " + fmtInterval(s.avg_interval) + " this epoch" : "current epoch average");
+  const hv = document.getElementById("t-hv");
+  hv.textContent = "";
+  hv.appendChild(document.createTextNode(s.hashvalue != null ? fmtFullInt(s.hashvalue) : "—"));
+  const unit = document.createElement("small"); unit.textContent = " sats/day";
+  hv.appendChild(unit);
+  set("t-hv-sub", s.subsidy != null
+    ? "subsidy " + s.subsidy + " BTC · fees excluded" : "subsidy only, fees excluded");
+  const full = document.getElementById("t-diff-full");
+  delete full.dataset.copyOrig;
+  full.textContent = s.difficulty != null ? fmtFullInt(s.difficulty) : "";
+}
+
+// -- calendar: annual table + year-by-month diverging grid ----------------------
+function tint(varName, mag) {
+  // series-hue wash behind text-token values; capped so text stays readable
+  const hex = cssVar(varName);
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  const a = Math.min(0.35, 0.04 + mag * 2.2);
+  return "rgba(" + r + "," + g + "," + b + "," + a + ")";
+}
+function changeCell(td, change, suffix) {
+  td.style.background = tint(change >= 0 ? "--data-pos" : "--data-neg", Math.abs(change));
+  td.style.textAlign = "right";
+  td.appendChild(document.createTextNode(fmtPct(change, 1) + (suffix || "")));
+  td.title = fmtPct(change, 2);
+}
+function renderCalendar() {
+  if (!S.rows.length) return;
+  const rows = S.rows, now = tipTime();
+  const curDiff = rows[rows.length - 1].difficulty;
+  const first = rows[0].start_time;
+  const valAt = t => t >= now ? curDiff : (diffAt(t) != null ? diffAt(t) : rows[0].difficulty);
+  const y0 = new Date(first * 1000).getUTCFullYear();
+  const y1 = new Date(now * 1000).getUTCFullYear();
+
+  // annual table, newest first; current year is YTD
+  const ytbody = document.querySelector("#years tbody");
+  ytbody.textContent = "";
+  for (let y = y1; y >= y0; y--) {
+    const t0 = Date.UTC(y, 0, 1) / 1000, t1 = Date.UTC(y + 1, 0, 1) / 1000;
+    const start = valAt(Math.max(t0, first)), end = valAt(t1), ytd = t1 > now;
+    const tr = document.createElement("tr");
+    const cells = [String(y) + (t0 < first ? " (from genesis)" : ""), fmtCompact(start, 2)];
+    for (const c of cells) {
+      const td = document.createElement("td"); td.textContent = c; tr.appendChild(td);
+    }
+    const exact = document.createElement("td");
+    exact.className = "copyable"; exact.textContent = fmtFullInt(start);
+    exact.title = "Click to copy " + Math.round(start);
+    exact.addEventListener("click", () => copyText(String(Math.round(start)), exact));
+    tr.appendChild(exact);
+    const ch = document.createElement("td");
+    changeCell(ch, end / start - 1, ytd ? " YTD" : "");
+    tr.appendChild(ch);
+    ytbody.appendChild(tr);
+  }
+  document.querySelector("#years thead th:first-child").style.textAlign = "left";
+
+  // monthly grid: rows = years (newest first), columns = Jan..Dec
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const mhead = document.querySelector("#months thead tr");
+  mhead.textContent = "";
+  const th0 = document.createElement("th"); th0.textContent = "Year";
+  th0.style.textAlign = "left"; mhead.appendChild(th0);
+  for (const m of MONTHS) { const th = document.createElement("th"); th.textContent = m; mhead.appendChild(th); }
+  const mbody = document.querySelector("#months tbody");
+  mbody.textContent = "";
+  for (let y = y1; y >= y0; y--) {
+    const tr = document.createElement("tr");
+    const td0 = document.createElement("td"); td0.textContent = String(y);
+    td0.style.textAlign = "left"; tr.appendChild(td0);
+    for (let m = 0; m < 12; m++) {
+      const t0 = Date.UTC(y, m, 1) / 1000, t1 = Date.UTC(y, m + 1, 1) / 1000;
+      const td = document.createElement("td");
+      if (t0 > now || t1 <= first) {
+        td.className = "empty"; td.textContent = "";
+      } else {
+        const mtd = t1 > now;
+        changeCell(td, valAt(t1) / valAt(Math.max(t0, first)) - 1, mtd ? "*" : "");
+      }
+      tr.appendChild(td);
+    }
+    mbody.appendChild(tr);
+  }
 }
 
 // -- svg helpers ----------------------------------------------------------------
@@ -929,6 +1096,7 @@ const COLS = [
   { key: "difficulty", label: "Difficulty", fmt: r => fmtCompact(r.difficulty, 2) },
   { key: "change", label: "Change", fmt: null },   // rendered with a direction dot
   { key: "hashrate", label: "Est. hashrate", fmt: r => fmtHash(r.hashrate) },
+  { key: "hashvalue", label: "Hashvalue", fmt: r => fmtCompact(r.hashvalue, 1) + " sats" },
 ];
 function durOf(r) {
   return r.avg_interval != null && r.blocks ? r.avg_interval * r.blocks : null;
@@ -981,6 +1149,11 @@ function renderTable() {
           td.appendChild(dot);
           td.appendChild(document.createTextNode(fmtPct(r.change)));
         }
+      } else if (c.key === "difficulty") {
+        td.className = "copyable";
+        td.textContent = c.fmt(r);
+        td.title = fmtFullInt(r.difficulty) + " — click to copy";
+        td.addEventListener("click", () => copyText(String(Math.round(r.difficulty)), td));
       } else td.textContent = c.fmt(r);
       row.appendChild(td);
     }
@@ -993,7 +1166,17 @@ function renderTable() {
 }
 
 // -- wiring ---------------------------------------------------------------------
-function render() { renderPill(); renderTiles(); drawDiff(); drawAdj(); renderTable(); }
+function render() { renderPill(); renderTiles(); renderCalendar(); drawDiff(); drawAdj(); renderTable(); }
+
+const diffFull = document.getElementById("t-diff-full");
+function copyCurrentDifficulty() {
+  const s = S.summary;
+  if (s && s.difficulty != null) copyText(String(Math.round(s.difficulty)), diffFull);
+}
+diffFull.addEventListener("click", copyCurrentDifficulty);
+diffFull.addEventListener("keydown", ev => {
+  if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); copyCurrentDifficulty(); }
+});
 
 document.getElementById("range").addEventListener("click", ev => {
   const b = ev.target.closest("button"); if (!b) return;
