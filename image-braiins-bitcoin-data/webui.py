@@ -1,19 +1,23 @@
 """Bitcoin Data — difficulty epoch analytics for Umbrel.
 
 Serves on :8080 (fronted by Umbrel's app_proxy):
-- GET  /               dashboard: summary tiles, difficulty + adjustment charts,
-                       epoch table with export; styled per Braiins CDS v11
-- GET  /api/summary    JSON polled by the page: node state + current-epoch stats
-- GET  /api/epochs     JSON: one row per difficulty epoch (all history)
-- GET  /export.csv     epoch table as CSV
-- GET  /export.json    epoch table as JSON
-- GET  /widgets/status Umbrel home-screen widget (three-stats), fetched
-                       server-side by umbrelOS
+- GET  /                dashboard: summary tiles, calendar views, records,
+                        difficulty + adjustment charts, projection, epoch table
+                        with export; styled per Braiins CDS v11
+- GET  /api             human-readable API documentation
+- GET  /api/summary     JSON polled by the page: node state + current-epoch stats
+- GET  /api/epochs      JSON: one row per difficulty epoch (all history)
+- GET  /export.csv      epoch table as CSV
+- GET  /export.json     epoch table as JSON
+- GET  /widgets/status  Umbrel home-screen widget (three-stats)
+- GET  /widgets/halving Umbrel home-screen widget (text-with-progress)
 
 Data comes from the user's own Bitcoin node (the official `bitcoin` Umbrel app)
 over JSON-RPC. Difficulty only changes every 2016 blocks, so the full history is
 one header per epoch boundary (~460 as of 2026): a one-time backfill, cached in
 /data/epochs.json, then a 30 s tip poll that appends a row per retarget.
+Per-block fees for the CURRENT epoch only come from getblockstats (recent
+blocks, so pruned nodes are fine) and feed the fee-aware hashvalue.
 
 DEMO_MODE=1 serves deterministic synthetic epochs for UI development without a
 node.
@@ -100,6 +104,7 @@ STATE = {
     "ibd": False,
     "verification": 1.0,
     "backfill": None,       # (done, total) while backfilling, else None
+    "fees": {},             # height -> totalfee sats, current epoch only
 }
 
 
@@ -107,27 +112,50 @@ def load_cache():
     try:
         with open(CACHE) as f:
             data = json.load(f)
-        return data.get("chain"), [tuple(b) for b in data.get("boundaries", [])]
+        fees = {int(k): v for k, v in data.get("fees", {}).items()}
+        return data.get("chain"), [tuple(b) for b in data.get("boundaries", [])], fees
     except (OSError, ValueError):
-        return None, []
+        return None, [], {}
 
 
-def save_cache(chain, boundaries):
+def save_cache(chain, boundaries, fees):
     tmp = CACHE + ".tmp"
     with open(tmp, "w") as f:
-        json.dump({"chain": chain, "boundaries": boundaries}, f)
+        json.dump({"chain": chain, "boundaries": boundaries, "fees": fees}, f)
     os.replace(tmp, CACHE)
 
 
+def sync_fees(fees, tip_height):
+    """Fill height->totalfee (sats) for the current epoch; ~2016 getblockstats
+    calls worst case on first run, spread over poll cycles (<=400 per cycle).
+    Recent blocks only, so pruned nodes are fine."""
+    epoch_start = tip_height // EPOCH_BLOCKS * EPOCH_BLOCKS
+    for h in list(fees):
+        if h < epoch_start or h > tip_height:
+            del fees[h]
+    fetched = 0
+    for h in range(max(1, epoch_start), tip_height + 1):
+        if h in fees:
+            continue
+        try:
+            fees[h] = rpc("getblockstats", [h, ["totalfee"]])["totalfee"]
+        except RpcError:
+            break  # node busy/pruned beyond reach: retry next cycle
+        fetched += 1
+        if fetched >= 400:
+            break
+    return fetched
+
+
 def sync_loop():
-    chain, boundaries = load_cache()
+    chain, boundaries, fees = load_cache()
     with LOCK:
-        STATE["chain"], STATE["boundaries"] = chain, boundaries
+        STATE.update(chain=chain, boundaries=boundaries, fees=dict(fees))
     while True:
         try:
             ci = rpc("getblockchaininfo")
             if ci["chain"] != chain:
-                chain, boundaries = ci["chain"], []
+                chain, boundaries, fees = ci["chain"], [], {}
             tip_height = ci["blocks"]
             want = tip_height // EPOCH_BLOCKS + 1  # boundaries 0..want-1
             while len(boundaries) < want:
@@ -135,18 +163,20 @@ def sync_loop():
                 hdr = rpc("getblockheader", [rpc("getblockhash", [h])])
                 boundaries.append((h, hdr["time"], hdr["difficulty"]))
                 if len(boundaries) % 100 == 0 or len(boundaries) == want:
-                    save_cache(chain, boundaries)
+                    save_cache(chain, boundaries, fees)
                 with LOCK:
                     STATE.update(chain=chain, boundaries=list(boundaries),
                                  backfill=(len(boundaries), want))
             tip_hdr = rpc("getblockheader", [ci["bestblockhash"]])
+            if sync_fees(fees, tip_height):
+                save_cache(chain, boundaries, fees)
             with LOCK:
                 STATE.update(chain=chain, boundaries=list(boundaries),
                              tip=(tip_height, tip_hdr["time"]),
                              updated=time.time(), error=None,
                              ibd=ci.get("initialblockdownload", False),
                              verification=ci.get("verificationprogress", 1.0),
-                             backfill=None)
+                             backfill=None, fees=dict(fees))
         except (RpcError, KeyError, ValueError) as e:
             with LOCK:
                 STATE["error"] = str(e)
@@ -180,11 +210,15 @@ def demo_state():
         boundaries.append((i * EPOCH_BLOCKS, int(t), diffs[i]))
         t += ts[i] * EPOCH_BLOCKS
     tip_height = (n - 1) * EPOCH_BLOCKS + 1204
+    # synthetic fees ~2-4% of the block reward, current epoch only
+    reward_sats = subsidy_btc(tip_height) * 1e8
+    fees = {h: int(reward_sats * (0.03 + 0.01 * math.sin(h / 37.0)))
+            for h in range((n - 1) * EPOCH_BLOCKS, tip_height + 1)}
     return {
         "chain": "main", "boundaries": boundaries,
         "tip": (tip_height, now - 300), "updated": time.time(),
         "error": None, "ibd": False, "verification": 1.0, "backfill": None,
-        "demo": True,
+        "fees": fees, "demo": True,
     }
 
 
@@ -264,6 +298,26 @@ def build_summary(state, rows):
         "hashvalue": hashvalue_sats(cur["difficulty"], tip[0]),
         "subsidy": subsidy_btc(tip[0]),
     })
+    # halving countdown (era boundaries are multiples of 210,000 blocks)
+    halving_height = (tip[0] // HALVING_BLOCKS + 1) * HALVING_BLOCKS
+    s.update({
+        "halving_height": halving_height,
+        "halving_blocks": halving_height - tip[0],
+        "halving_eta": tip[1] + (halving_height - tip[0]) * (avg or TARGET_INTERVAL),
+        "next_subsidy": subsidy_btc(halving_height),
+        "era_progress": (tip[0] % HALVING_BLOCKS) / HALVING_BLOCKS,
+    })
+    # fee-aware hashvalue from current-epoch getblockstats (sats per block)
+    fee_vals = list(state.get("fees", {}).values())
+    if len(fee_vals) >= 10:
+        avg_fee = sum(fee_vals) / len(fee_vals)
+        fees_pct = avg_fee / (s["subsidy"] * 1e8)
+        s.update({
+            "avg_fee_sats": avg_fee,
+            "fees_pct_of_reward": fees_pct,
+            "hashvalue_with_fees": s["hashvalue"] * (1 + fees_pct),
+            "fee_blocks": len(fee_vals),
+        })
     closed = [r for r in rows if r["change"] is not None and not r["current"]]
     if closed:
         up = max(closed, key=lambda r: r["change"])
@@ -335,6 +389,78 @@ def widget_status(state, rows):
         ],
     }
 
+
+def widget_halving(state, rows):
+    s = build_summary(state, rows)
+    if "halving_blocks" not in s:
+        return {"type": "text-with-progress", "refresh": "1h", "link": "",
+                "title": "Halving countdown", "text": "—", "subtext": "",
+                "progressLabel": "", "progress": 0}
+    eta = time.strftime("%b %Y", time.gmtime(s["halving_eta"]))
+    return {
+        "type": "text-with-progress",
+        "refresh": "1h",
+        "link": "",
+        "title": "Halving countdown",
+        "text": "~ " + eta,
+        "subtext": "%s blocks · subsidy %s → %s BTC" % (
+            fmt_compact(s["halving_blocks"], 0), s["subsidy"], s["next_subsidy"]),
+        "progressLabel": "Era %.1f%%" % (s["era_progress"] * 100),
+        "progress": round(s["era_progress"], 4),
+    }
+
+
+# ---------------------------------------------------------------------------
+# API docs: everything the dashboard shows is scriptable from the same origin.
+
+API_PAGE = """<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitcoin Data — API</title>
+<style>
+:root { --bg: #fff; --fg: #161616; --dim: #525252; --line: #e0e0e0; --layer: #f4f4f4; --link: #0f62fe; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #262626; --fg: #f4f4f4; --dim: #c6c6c6; --line: #525252; --layer: #393939; --link: #78a9ff; }
+}
+body { margin: 0 auto; max-width: 46rem; padding: 2rem 1rem 4rem; background: var(--bg); color: var(--fg);
+  font: 400 14px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+h1 { font-size: 24px; font-weight: 400; } h2 { font-size: 16px; margin-top: 2rem; }
+a { color: var(--link); }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+pre { background: var(--layer); padding: .75rem; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+td, th { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.dim { color: var(--dim); }
+</style></head><body>
+<h1>Bitcoin Data &mdash; API</h1>
+<p class="dim">Same-origin JSON endpoints behind the dashboard. All data derives from your own
+Bitcoin node; timestamps are unix seconds UTC. From another machine, use the app URL
+(<code>http://umbrel.local:4549</code>).</p>
+<h2>Endpoints</h2>
+<table>
+<tr><th>Path</th><th>Returns</th></tr>
+<tr><td><code>GET <a href="api/summary">/api/summary</a></code></td><td>Node status and current-epoch stats:
+<code>status</code> (ok&middot;waiting&middot;backfill&middot;ibd&middot;error&middot;demo), <code>tip_height</code>, <code>difficulty</code>,
+<code>epoch</code>, <code>progress</code> 0&ndash;1, <code>projected_change</code>, <code>eta</code>,
+<code>hashrate</code> H/s, <code>hashvalue</code> and <code>hashvalue_with_fees</code> (sats/day for 1 PH/s),
+<code>avg_fee_sats</code> and <code>fees_pct_of_reward</code> (current-epoch average),
+<code>subsidy</code> BTC, <code>halving_height</code>, <code>halving_blocks</code>, <code>halving_eta</code>,
+<code>next_subsidy</code>, <code>era_progress</code>, <code>max_up</code>/<code>max_down</code> record adjustments.</td></tr>
+<tr><td><code>GET <a href="api/epochs">/api/epochs</a></code></td><td><code>{rows: [&hellip;]}</code>, one row per difficulty
+epoch since genesis: <code>epoch</code>, <code>start_height</code>, <code>start_time</code>, <code>end_time</code>,
+<code>difficulty</code>, <code>change</code> (fraction vs previous), <code>blocks</code>, <code>avg_interval</code> s,
+<code>hashrate</code> H/s, <code>hashvalue</code> sats/PH&middot;day, <code>current</code>. The last row is in progress.</td></tr>
+<tr><td><code>GET <a href="export.csv">/export.csv</a></code></td><td>Epoch table as CSV (full history, formatted timestamps).</td></tr>
+<tr><td><code>GET <a href="export.json">/export.json</a></code></td><td>Same rows as the CSV, as a JSON array.</td></tr>
+<tr><td><code>GET <a href="widgets/status">/widgets/status</a></code></td><td>umbrelOS three-stats widget payload.</td></tr>
+<tr><td><code>GET <a href="widgets/halving">/widgets/halving</a></code></td><td>umbrelOS text-with-progress widget payload.</td></tr>
+</table>
+<h2>Example</h2>
+<pre>curl -s http://umbrel.local:4549/api/summary | jq .difficulty
+curl -s http://umbrel.local:4549/api/epochs | jq '.rows[-1]'</pre>
+<p class="dim">Hashvalue = expected earnings of 1 PH/s in sats/day; the per-epoch value and exports
+use the block subsidy only, <code>hashvalue_with_fees</code> adds the current epoch's observed average fees.
+No authentication &mdash; the app is only reachable on your Umbrel's network. <a href="./">&larr; back to dashboard</a></p>
+</body></html>"""
 
 # ---------------------------------------------------------------------------
 # Page
@@ -439,7 +565,7 @@ PAGE = """<!doctype html>
   }
 }
 * { box-sizing: border-box; }
-html { background: var(--background); }
+html { background: var(--background); scroll-behavior: smooth; }
 body { margin: 0; font: 400 14px/1.4286 var(--font-sans); letter-spacing: .16px;
   background: var(--background); color: var(--text-primary); }
 
@@ -473,8 +599,19 @@ h2 { font: 400 28px/1.29 var(--font-sans); letter-spacing: 0; margin: 0; }
 #pill.error .dot { background: var(--support-error); }
 #pill.demo .dot { background: var(--violet-60); }
 
+/* Sticky in-page navigation (Carbon tabs on background) */
+.pagenav { position: sticky; top: 0; z-index: 5; background: var(--background);
+  display: flex; overflow-x: auto; border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--spacing-06); }
+.pagenav a { padding: var(--spacing-04) var(--spacing-05); white-space: nowrap;
+  font: 400 14px/1 var(--font-brand); letter-spacing: .16px; color: var(--text-secondary);
+  text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.pagenav a:hover { color: var(--text-primary); background: var(--layer-hover); }
+.pagenav a.active { color: var(--text-primary); border-bottom-color: var(--violet-60); font-weight: 700; }
+main section { scroll-margin-top: 52px; }
+
 /* Stat tiles: flat layer fill, sharp corners, no shadow */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; margin-bottom: var(--spacing-06); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 1px; margin-bottom: var(--spacing-06); }
 @media (max-width: 480px) { .tiles { grid-template-columns: 1fr; } }
 .tile { background: var(--layer-01); padding: var(--spacing-05); min-height: 120px; }
 .tile .label { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
@@ -566,6 +703,15 @@ tbody td .dirdot { display: inline-block; margin-right: 6px; }
 .ghost:hover { background: var(--layer-hover); color: var(--link-primary-hover); }
 .ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
+/* inline stat strip (CAGR row in By year) */
+.statrow { display: flex; flex-wrap: wrap; gap: var(--spacing-06); margin-bottom: var(--spacing-05);
+  font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
+.statrow b { display: block; font: 700 16px/1.375 var(--font-sans); letter-spacing: 0;
+  color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+/* records: two ranked lists side by side */
+.recgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--spacing-06); }
+
 /* calendar: year rows x month columns, diverging tint behind text-token values */
 .cal td, .cal th { height: 36px; padding: 0 var(--spacing-04); }
 .cal td { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; }
@@ -578,7 +724,7 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
 <header class="shell">
   <div class="mark">__SYMBOL__</div>
   <span class="name">Bitcoin Data<small>on Umbrel</small></span>
-  <nav><a class="active" href="">Difficulty</a></nav>
+  <nav><a class="active" href="./">Difficulty</a><a href="api">API</a></nav>
 </header>
 <main>
   <div class="titlerow">
@@ -586,6 +732,16 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
     <span id="pill"><span class="dot"></span><span id="pill-text">Connecting&hellip;</span></span>
   </div>
 
+  <nav class="pagenav" id="pagenav" aria-label="Sections">
+    <a href="#overview" class="active">Overview</a>
+    <a href="#calendar">Calendar</a>
+    <a href="#records">Records</a>
+    <a href="#charts">Charts</a>
+    <a href="#projection">Projection</a>
+    <a href="#epochs">Epochs</a>
+  </nav>
+
+  <section id="overview">
   <div class="tiles">
     <div class="tile"><div class="label">Difficulty</div>
       <div class="value" id="t-diff">—</div>
@@ -605,11 +761,18 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
       <div class="sub" id="t-hash-sub">current epoch average</div></div>
     <div class="tile"><div class="label">Hashvalue (1 PH/s)</div>
       <div class="value" id="t-hv">—<small>sats/day</small></div>
+      <div class="sub" id="t-hv-fees"></div>
       <div class="sub" id="t-hv-sub">subsidy only, fees excluded</div></div>
+    <div class="tile"><div class="label">Halving countdown</div>
+      <div class="value" id="t-halv">—<small>blocks</small></div>
+      <div class="sub" id="t-halv-sub"></div></div>
   </div>
+  </section>
 
+  <section id="calendar">
   <div class="card">
     <div class="cardhead"><h3>By year</h3></div>
+    <div class="statrow" id="growth"></div>
     <div class="tablewrap"><table id="years">
       <thead><tr><th>Year</th><th>Difficulty on Jan 1</th><th>Exact value</th><th>Change over year</th></tr></thead>
       <tbody></tbody>
@@ -625,7 +788,24 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
     </table></div>
     <p class="note">Difficulty change from the first to the last moment of each month (UTC). * = month to date.</p>
   </div>
+  </section>
 
+  <section id="records">
+  <div class="card">
+    <div class="cardhead"><h3>Records</h3></div>
+    <div class="recgrid">
+      <div class="tablewrap"><table id="rec-up">
+        <thead><tr><th>Largest increases</th><th>Epoch</th><th>Date</th></tr></thead><tbody></tbody>
+      </table></div>
+      <div class="tablewrap"><table id="rec-down">
+        <thead><tr><th>Largest decreases</th><th>Epoch</th><th>Date</th></tr></thead><tbody></tbody>
+      </table></div>
+    </div>
+    <p class="note" id="streaks"></p>
+  </div>
+  </section>
+
+  <section id="charts">
   <div class="filters">
     <span class="flabel">Range</span>
     <span class="switcher" id="range" role="group" aria-label="Date range">
@@ -638,21 +818,41 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
 
   <div class="card">
     <div class="cardhead"><h3>Difficulty over time</h3>
-      <span class="switcher" id="scale" role="group" aria-label="Y scale">
+      <span><span class="switcher" id="scale" role="group" aria-label="Y scale">
         <button data-s="linear" aria-pressed="true">Linear</button>
         <button data-s="log" aria-pressed="false">Log</button>
-      </span></div>
+      </span><button class="ghost" id="dl-diff" title="Download chart as PNG">PNG</button></span></div>
     <svg class="chart" id="chart-diff" height="300" role="img" aria-label="Difficulty over time"></svg>
     <div class="tooltip" id="tt-diff"></div>
   </div>
 
   <div class="card">
     <div class="cardhead"><h3>Adjustment per epoch</h3>
-      <span class="key"><span><i class="pos"></i>Increase</span><span><i class="neg"></i>Decrease</span></span></div>
+      <span><span class="key"><span><i class="pos"></i>Increase</span><span><i class="neg"></i>Decrease</span></span><button class="ghost" id="dl-adj" title="Download chart as PNG">PNG</button></span></div>
     <svg class="chart" id="chart-adj" height="260" role="img" aria-label="Difficulty adjustment per epoch"></svg>
     <div class="tooltip" id="tt-adj"></div>
   </div>
+  </section>
 
+  <section id="projection">
+  <div class="card">
+    <div class="cardhead"><h3>Projection</h3>
+      <span class="switcher" id="basis" role="group" aria-label="Growth basis">
+        <button data-b="91" aria-pressed="false">3m trend</button>
+        <button data-b="182" aria-pressed="false">6m trend</button>
+        <button data-b="365" aria-pressed="true">1y trend</button>
+        <button data-b="730" aria-pressed="false">2y trend</button>
+      </span></div>
+    <div class="tablewrap"><table id="proj">
+      <thead><tr><th>Horizon</th><th>Date</th><th>Difficulty</th><th>vs today</th><th>Hashvalue (1 PH/s)</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p class="note">Compound extrapolation of the trailing growth window &mdash; not a forecast.
+      Hashvalue is subsidy-only and accounts for the halving schedule.</p>
+  </div>
+  </section>
+
+  <section id="epochs">
   <div class="card">
     <div class="cardhead"><h3>Epochs</h3>
       <span><a class="ghost" href="export.csv" download>Export CSV</a><a class="ghost" href="export.json" download>Export JSON</a></span></div>
@@ -663,13 +863,14 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
       <span class="pager"><button id="pg-prev">&larr; Newer</button><button id="pg-next">Older &rarr;</button></span></div>
     <p class="note">Est. hashrate is derived from difficulty and observed block intervals. Exports always contain the full history regardless of the selected range.</p>
   </div>
+  </section>
 
-  <footer>__PKG__Data from your Bitcoin node &middot; difficulty retargets every 2,016 blocks</footer>
+  <footer>__PKG__Data from your Bitcoin node &middot; difficulty retargets every 2,016 blocks &middot; <a href="api">API</a></footer>
 </main>
 <script>
 "use strict";
 const S = { rows: [], summary: null, range: "all", scale: "linear",
-            sort: { key: "epoch", dir: -1 }, page: 0 };
+            sort: { key: "epoch", dir: -1 }, page: 0, basis: 365 };
 const PAGE_SIZE = 25;
 const RANGE_S = { "4y": 4 * 365.25 * 86400, "1y": 365.25 * 86400, "90d": 90 * 86400 };
 
@@ -799,10 +1000,118 @@ function renderTiles() {
   const unit = document.createElement("small"); unit.textContent = " sats/day";
   hv.appendChild(unit);
   set("t-hv-sub", s.subsidy != null
-    ? "subsidy " + s.subsidy + " BTC · fees excluded" : "subsidy only, fees excluded");
+    ? "subsidy " + s.subsidy + " BTC" : "subsidy only, fees excluded");
+  set("t-hv-fees", s.hashvalue_with_fees != null
+    ? "incl. fees " + fmtFullInt(s.hashvalue_with_fees) +
+      " (" + fmtPct(s.fees_pct_of_reward, 1) + " of reward)" : "");
+  const halv = document.getElementById("t-halv");
+  halv.textContent = "";
+  halv.appendChild(document.createTextNode(s.halving_blocks != null ? fmtInt(s.halving_blocks) : "—"));
+  const hu = document.createElement("small"); hu.textContent = " blocks";
+  halv.appendChild(hu);
+  set("t-halv-sub", s.halving_eta != null
+    ? "~ " + fmtDate(s.halving_eta) + " · subsidy " + s.subsidy + " → " + s.next_subsidy + " BTC" : "");
   const full = document.getElementById("t-diff-full");
   delete full.dataset.copyOrig;
   full.textContent = s.difficulty != null ? fmtFullInt(s.difficulty) : "";
+}
+
+// -- records: ranked adjustments + streaks --------------------------------------
+function renderRecords() {
+  const changed = S.rows.filter(r => r.change != null);
+  if (!changed.length) return;
+  const fill = (id, list) => {
+    const tb = document.querySelector(id + " tbody");
+    tb.textContent = "";
+    for (const r of list) {
+      const tr = document.createElement("tr");
+      const c1 = document.createElement("td");
+      c1.style.textAlign = "left";
+      const dot = document.createElement("span");
+      dot.className = "dirdot " + (r.change >= 0 ? "up" : "down");
+      c1.appendChild(dot);
+      c1.appendChild(document.createTextNode(fmtPct(r.change)));
+      const c2 = document.createElement("td");
+      c2.textContent = String(r.epoch) + (r.current ? " · now" : "");
+      const c3 = document.createElement("td"); c3.textContent = fmtDate(r.start_time);
+      tr.append(c1, c2, c3);
+      tb.appendChild(tr);
+    }
+  };
+  const sorted = changed.slice().sort((a, b) => b.change - a.change);
+  fill("#rec-up", sorted.slice(0, 5));
+  fill("#rec-down", sorted.slice(-5).reverse());
+  let cur = 0, prevSign = 0, best = 0, bestEnd = null;
+  for (const r of changed) {
+    const sign = r.change >= 0 ? 1 : -1;
+    cur = sign === prevSign ? cur + 1 : 1;
+    prevSign = sign;
+    if (sign > 0 && cur > best) { best = cur; bestEnd = r; }
+  }
+  document.getElementById("streaks").textContent =
+    "Current streak: " + cur + " consecutive " + (prevSign >= 0 ? "increases" : "decreases") +
+    ". Record: " + best + " consecutive increases, ending " + fmtDate(bestEnd.start_time) +
+    ". The in-progress epoch counts — its adjustment was fixed at the last retarget.";
+}
+
+// -- growth: CAGR over trailing windows + doubling time -------------------------
+function renderGrowth() {
+  const box = document.getElementById("growth");
+  box.textContent = "";
+  if (!S.rows.length || !S.summary || S.summary.difficulty == null) return;
+  const now = tipTime(), cur = S.summary.difficulty;
+  const stat = (big, label) => {
+    const div = document.createElement("div");
+    const b = document.createElement("b"); b.textContent = big;
+    div.appendChild(b);
+    div.appendChild(document.createTextNode(label));
+    box.appendChild(div);
+  };
+  for (const [label, years] of [["1y", 1], ["2y", 2], ["4y", 4]]) {
+    const then = diffAt(now - years * 365.25 * 86400);
+    if (then == null) continue;
+    stat(fmtPct(Math.pow(cur / then, 1 / years) - 1, 1) + "/yr", label + " CAGR");
+  }
+  const g1 = diffAt(now - 365.25 * 86400);
+  if (g1 != null && cur > g1) {
+    const dbl = Math.log(2) / Math.log(cur / g1);
+    stat(dbl < 2 ? Math.round(dbl * 12) + " months" : dbl.toFixed(1) + " years",
+      "doubling time at 1y pace");
+  }
+}
+
+// -- projection: compound extrapolation of a trailing window --------------------
+function renderProjection() {
+  const tb = document.querySelector("#proj tbody");
+  tb.textContent = "";
+  const s = S.summary;
+  if (!S.rows.length || !s || s.difficulty == null) return;
+  const now = tipTime(), cur = s.difficulty;
+  const then = diffAt(now - S.basis * 86400);
+  if (then == null) {
+    const tr = document.createElement("tr"), td = document.createElement("td");
+    td.colSpan = 5; td.textContent = "Not enough history for this window";
+    tr.appendChild(td); tb.appendChild(tr);
+    return;
+  }
+  const daily = Math.pow(cur / then, 1 / S.basis);
+  for (const [label, days] of [["+3 months", 91], ["+6 months", 182],
+                               ["+1 year", 365], ["+2 years", 730]]) {
+    const proj = cur * Math.pow(daily, days);
+    const height = (s.tip_height || 0) + Math.round(days * 144);
+    const subsidy = 50 / Math.pow(2, Math.floor(height / 210000));
+    const hv = 1e15 * 86400 / (proj * 4294967296) * subsidy * 1e8;
+    const tr = document.createElement("tr");
+    const cells = [label, fmtDate(now + days * 86400), fmtCompact(proj, 2),
+                   fmtPct(proj / cur - 1, 0), fmtFullInt(hv) + " sats/day"];
+    cells.forEach((c, i) => {
+      const td = document.createElement("td");
+      if (i === 0) td.style.textAlign = "left";
+      td.textContent = c;
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  }
 }
 
 // -- calendar: annual table + year-by-month diverging grid ----------------------
@@ -1165,8 +1474,69 @@ function renderTable() {
   document.getElementById("pg-next").disabled = S.page >= pages - 1;
 }
 
+// -- chart PNG download: inline computed styles, embed brand font ---------------
+let fontCssPromise = null;
+function fontCss() {
+  if (!fontCssPromise) fontCssPromise = Promise.all(
+    ["fonts/braiinssans-regular.woff2", "fonts/braiinssans-bold.woff2"].map(u =>
+      fetch(u).then(r => r.arrayBuffer()).then(buf => {
+        let bin = "";
+        const bytes = new Uint8Array(buf);
+        for (let i = 0; i < bytes.length; i += 0x8000)
+          bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return btoa(bin);
+      })))
+    .then(b64 =>
+      [400, 700].map((w, i) =>
+        '@font-face{font-family:"Braiins Sans";font-weight:' + w +
+        ';src:url(data:font/woff2;base64,' + b64[i] + ') format("woff2")}').join(""));
+  return fontCssPromise;
+}
+async function downloadChart(svgId, name) {
+  const src = document.getElementById(svgId);
+  const W = parseInt(src.getAttribute("width"), 10), H = parseInt(src.getAttribute("height"), 10);
+  if (!W) return;
+  const clone = src.cloneNode(true);
+  clone.setAttribute("xmlns", NS);
+  const a = src.querySelectorAll("*"), b = clone.querySelectorAll("*");
+  for (let i = 0; i < a.length; i++) {   // CSS classes don't travel with the clone
+    const cs = getComputedStyle(a[i]);
+    b[i].setAttribute("fill", cs.fill);
+    b[i].setAttribute("stroke", cs.stroke);
+    b[i].setAttribute("stroke-width", cs.strokeWidth);
+    if (a[i].tagName === "text")
+      b[i].setAttribute("style", "font:" + cs.fontWeight + " " + cs.fontSize +
+        " 'Braiins Sans', sans-serif");
+  }
+  const style = document.createElementNS(NS, "style");
+  style.textContent = await fontCss();
+  clone.insertBefore(style, clone.firstChild);
+  const bg = el("rect", { width: W, height: H, fill: cssVar("--layer-01") });
+  clone.insertBefore(bg, style.nextSibling);
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],
+    { type: "image/svg+xml" }));
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = W * 2; canvas.height = H * 2;   // 2x for crisp slides
+    canvas.getContext("2d").drawImage(img, 0, 0, W * 2, H * 2);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(png => {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(png);
+      link.download = name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+    }, "image/png");
+  };
+  img.src = url;
+}
+
 // -- wiring ---------------------------------------------------------------------
-function render() { renderPill(); renderTiles(); renderCalendar(); drawDiff(); drawAdj(); renderTable(); }
+function render() {
+  renderPill(); renderTiles(); renderCalendar(); renderRecords(); renderGrowth();
+  drawDiff(); drawAdj(); renderProjection(); renderTable();
+}
 
 const diffFull = document.getElementById("t-diff-full");
 function copyCurrentDifficulty() {
@@ -1192,8 +1562,31 @@ document.getElementById("scale").addEventListener("click", ev => {
     x.setAttribute("aria-pressed", String(x === b));
   drawDiff();
 });
+document.getElementById("basis").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  S.basis = parseInt(b.dataset.b, 10);
+  for (const x of ev.currentTarget.querySelectorAll("button"))
+    x.setAttribute("aria-pressed", String(x === b));
+  renderProjection();
+});
+document.getElementById("dl-diff").addEventListener("click",
+  () => downloadChart("chart-diff", "bitcoin-difficulty.png"));
+document.getElementById("dl-adj").addEventListener("click",
+  () => downloadChart("chart-adj", "bitcoin-difficulty-adjustments.png"));
 document.getElementById("pg-prev").addEventListener("click", () => { S.page--; renderTable(); });
 document.getElementById("pg-next").addEventListener("click", () => { S.page++; renderTable(); });
+
+// section nav: highlight the section under the reader
+const NAV_SECTIONS = Array.from(document.querySelectorAll("main section"));
+const NAV_LINKS = Array.from(document.querySelectorAll("#pagenav a"));
+function updateNav() {
+  const yy = window.scrollY + 90;
+  let cur = NAV_SECTIONS[0];
+  for (const sec of NAV_SECTIONS) if (sec.offsetTop <= yy) cur = sec;
+  for (const a of NAV_LINKS)
+    a.classList.toggle("active", a.getAttribute("href") === "#" + cur.id);
+}
+window.addEventListener("scroll", updateNav, { passive: true });
 let rsz;
 window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { drawDiff(); drawAdj(); }, 150); });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawDiff(); drawAdj(); });
@@ -1227,6 +1620,13 @@ class Handler(BaseHTTPRequestHandler):
         if path.endswith("/widgets/status"):
             self._send(json.dumps(widget_status(state, build_rows(state))).encode(),
                        "application/json")
+            return
+        if path.endswith("/widgets/halving"):
+            self._send(json.dumps(widget_halving(state, build_rows(state))).encode(),
+                       "application/json")
+            return
+        if path.rstrip("/").endswith("/api"):
+            self._send(API_PAGE.encode(), "text/html; charset=utf-8")
             return
         if path.endswith("/api/epochs"):
             rows = build_rows(state)
