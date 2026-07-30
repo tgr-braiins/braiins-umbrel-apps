@@ -24,7 +24,7 @@ on:
         required: false
         default: ""
       release_notes:
-        description: "Release notes (Markdown), used when a version is given. Shown in-app and added to CHANGELOG.md."
+        description: "Release notes (Markdown), used when a version is given. Shown in-app and added to CHANGELOG-braiins-manager-agent.md."
         required: false
         default: ""
 
@@ -118,7 +118,7 @@ jobs:
             - image rebuilt from the current `image-braiins-manager-agent/` sources (agent binary unchanged) and smoke-tested
             - multi-arch image pushed to `${{ env.IMAGE }}:${{ steps.rel.outputs.version }}`
             - compose pinned to the new multi-arch index digest
-            ${{ steps.rel.outputs.bumped == 'true' && '- manifest version + releaseNotes bumped and CHANGELOG.md entry added → existing installs get an Update badge' || '- manifest version unchanged (digest-only re-pin) → only new installs pull this; existing installs get no Update badge' }}
+            ${{ steps.rel.outputs.bumped == 'true' && '- manifest version + releaseNotes bumped and CHANGELOG-braiins-manager-agent.md entry added → existing installs get an Update badge' || '- manifest version unchanged (digest-only re-pin) → only new installs pull this; existing installs get no Update badge' }}
 
             Review checklist before merging:
             - [ ] releaseNotes / CHANGELOG entry read sanely

@@ -39,8 +39,9 @@ Design rationale — why the package is built the way it is — lives in
 - `braiins-toolbox/` — the Braiins Toolbox app
 - `image-braiins-toolbox/` — source of the Toolbox Docker image
   (`ghcr.io/tgr-braiins/braiins-toolbox`)
-- `CHANGELOG.md` — Braiins Manager Agent release notes history (the manifest's
-  `releaseNotes` only holds the current version)
+- `CHANGELOG-braiins-manager-agent.md`, `CHANGELOG-braiins-toolbox.md` —
+  per-app release-notes history (each manifest's `releaseNotes` only holds
+  the current version)
 
 ## How the Toolbox image works
 
@@ -184,7 +185,7 @@ pushes, pins the new digest, and opens a PR — same review gate as the automate
 flow. Two modes, chosen by the `version` input:
 
 - **Give a version** (e.g. `4.11.1-1`) → the manifest `version` + `releaseNotes`
-  are bumped and a `CHANGELOG.md` entry is added, so **existing** installs get an
+  are bumped and a `CHANGELOG-braiins-manager-agent.md` entry is added, so **existing** installs get an
   Update badge. umbrelOS keys the badge off the manifest `version`, so it must
   increase; a pre-release suffix on the next patch (`4.11.1-1`, `4.11.1-2`, …)
   sorts above the current agent version but below a real upstream `4.11.1`, so

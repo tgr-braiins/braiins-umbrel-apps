@@ -59,7 +59,7 @@ APPS = {
         "version_arg": "BMA_VERSION",
         "manifest": "braiins-manager-agent/umbrel-app.yml",
         "compose": "braiins-manager-agent/docker-compose.yml",
-        "changelog": "CHANGELOG.md",
+        "changelog": "CHANGELOG-braiins-manager-agent.md",
         "image": "braiins-manager-agent",
         # strict semver core; suffix = pre-release of the next patch, sorts below
         "version_re": r"(\d+)\.(\d+)\.(\d+)(?:[-+]([0-9A-Za-z.-]+))?",
