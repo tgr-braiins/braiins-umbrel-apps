@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.4.0] - 2026-07-30
+
+New Signalling page tracking BIP-110 (version bit 4): counts over the last 18/36/72/144/288 blocks, current retarget period vs the 1,109-block lock-in threshold, a strip chart of the last 288 blocks, and recent signalling blocks. Records now includes the five longest stretches without a new difficulty ATH, with max drawdown.
+
 ## [1.3.0] - 2026-07-30
 
 Exact projected retarget time, fees-inclusive hashvalue by default, bare-integer hashvalue column, longest wait without a new difficulty ATH, implied hashrate in the annual view, and separate Annual/Monthly navigation.
