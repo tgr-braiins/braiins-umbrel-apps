@@ -3,7 +3,7 @@ version: "3.7"
 services:
   app_proxy:
     environment:
-      APP_HOST: braiins-braiins-toolbox_web_1
+      APP_HOST: braiins-toolbox_web_1
       APP_PORT: 8888
 
   web:

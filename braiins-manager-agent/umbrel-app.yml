@@ -1,5 +1,5 @@
 manifestVersion: 1.1
-id: braiins-braiins-manager-agent
+id: braiins-manager-agent
 category: bitcoin
 name: Braiins Manager Agent
 version: "4.11.1-5"
@@ -25,10 +25,10 @@ repo: https://github.com/tgr-braiins/braiins-umbrel-apps
 support: https://academy.braiins.com/braiins-manager/overview
 
 port: 4547
-icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-manager-agent/icon.svg
+icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-manager-agent/icon.svg
 gallery:
-  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-manager-agent/gallery/1.png
-  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-manager-agent/gallery/2.png
+  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-manager-agent/gallery/1.png
+  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-manager-agent/gallery/2.png
 path: ""
 
 defaultUsername: ""

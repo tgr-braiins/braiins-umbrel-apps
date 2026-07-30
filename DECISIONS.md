@@ -180,7 +180,7 @@ Semantic tokens re-resolve between the White and Gray 90 themes via
 (brand), a deliberate override of the token file's blue-60; links keep the
 CDS blue link tokens. Braiins Sans (regular + bold
 WOFF2, converted from the public visualbook OTFs at
-design.braiins.com/braiins/typography) is committed under `image/fonts/`,
+design.braiins.com/braiins/typography) is committed under `image-braiins-manager-agent/fonts/`,
 baked into the image, and served by `webui.py` itself: an Umbrel box must not
 depend on a Braiins web host to render its local setup page, and phoning an
 external CDN from a self-hosted node is exactly what Umbrel users install

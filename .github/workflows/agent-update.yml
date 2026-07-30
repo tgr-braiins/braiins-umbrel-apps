@@ -59,7 +59,7 @@ jobs:
 
       - name: Build amd64 image for smoke test
         if: steps.bump.outputs.changed == 'true'
-        run: docker buildx build --platform linux/amd64 --provenance=false --load --tag smoke-test:local image/
+        run: docker buildx build --platform linux/amd64 --provenance=false --load --tag smoke-test:local image-braiins-manager-agent/
 
       - name: Smoke test
         if: steps.bump.outputs.changed == 'true'
@@ -84,7 +84,7 @@ jobs:
             --platform linux/amd64,linux/arm64 \
             --provenance=false \
             --tag "$IMAGE:${{ steps.bump.outputs.version }}" \
-            --push image/
+            --push image-braiins-manager-agent/
 
       - name: Pin multi-arch index digest in compose
         if: steps.bump.outputs.changed == 'true'

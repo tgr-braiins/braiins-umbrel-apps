@@ -2,7 +2,7 @@
 
 Notable changes to the **Braiins Toolbox** Umbrel app, newest first. The
 version number is the upstream Toolbox version (`version` in
-`braiins-braiins-toolbox/umbrel-app.yml`), optionally with a `-N` wrapper
+`braiins-toolbox/umbrel-app.yml`), optionally with a `-N` wrapper
 revision suffix for packaging-only releases (e.g. `26.06-1`).
 
 Each upstream entry is the release description from the public release feed —

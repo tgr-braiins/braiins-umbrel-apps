@@ -2,7 +2,7 @@
 
 Notable changes to the **Braiins Manager Agent** Umbrel app, newest first. The
 version number is the upstream agent version (`version` in
-`braiins-braiins-manager-agent/umbrel-app.yml`).
+`braiins-manager-agent/umbrel-app.yml`).
 
 Each entry is the release description from the public release feed — the same
 text shown as the in-app update notes. This file keeps the history, since the
