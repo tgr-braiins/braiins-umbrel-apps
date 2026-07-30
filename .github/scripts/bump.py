@@ -67,6 +67,23 @@ APPS = {
         # webui.py footer reads APP_VERSION from compose; keep it in sync on pin
         "compose_app_version": True,
     },
+    "bitcoin-data": {
+        "display": "Bitcoin Data",
+        # No upstream: the app IS this repo's webui.py, so there is no feed
+        # and `check` must not be run for it — only release / pin.
+        "feed": None,
+        "feed_version_key": None,
+        "dockerfile": "image-bitcoin-data/Dockerfile",
+        "version_arg": None,
+        "manifest": "bitcoin-data/umbrel-app.yml",
+        "compose": "bitcoin-data/docker-compose.yml",
+        "changelog": "CHANGELOG-bitcoin-data.md",
+        "image": "bitcoin-data",
+        # plain semver; a -N suffix would be meaningless with no upstream
+        "version_re": r"(\d+)\.(\d+)\.(\d+)",
+        "suffix_above_core": False,
+        "compose_app_version": True,
+    },
     "toolbox": {
         "display": "Braiins Toolbox",
         "feed": "https://downloads.braiins.com/braiins-toolbox/index.json",

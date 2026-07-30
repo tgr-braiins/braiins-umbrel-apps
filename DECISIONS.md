@@ -274,3 +274,57 @@ Two facts make this safe (both verified in source, umbrel master @ 2026-07):
   sorts *below* its core, preserving its next-patch scheme. Without the
   toolbox rule, a wrapper release `26.06-1` would make the daily feed check
   see plain `26.06` as "newer" and open a spurious downgrade PR.
+
+# Bitcoin Data package
+
+## No upstream — the repo is the app
+
+Unlike the agent and Toolbox, Bitcoin Data packages no Braiins binary: the
+entire app is `image-bitcoin-data/webui.py` (stdlib-only Python, same pattern
+as the agent's config UI) plus the locally served Braiins Sans fonts. There is
+therefore no release feed, no `check` in `bump.py` (its `feed` is `None`), and
+no daily update workflow — releases are human-triggered via
+`bitcoin-data-release.yml`, and versions are plain semver (`1.0.0`) with no
+wrapper-suffix scheme, since every release is by definition a wrapper release.
+
+## All data comes from the user's own node
+
+`dependencies: [bitcoin]` in the manifest; the compose file passes the
+official bitcoin app's exported `APP_BITCOIN_NODE_IP` / `APP_BITCOIN_RPC_PORT`
+/ `APP_BITCOIN_RPC_USER` / `APP_BITCOIN_RPC_PASS` (the same contract mempool
+consumes). No third-party API is ever called — the point of the app is that
+the numbers come from a chain the user verified. The UI degrades to a labeled
+waiting/syncing state when the node is unreachable or in IBD instead of
+falling back to a public API.
+
+## One header per epoch, JSON cache, no database
+
+Difficulty only changes at 2016-block retarget boundaries, so the full history
+is one `getblockheader` per boundary (~460 as of 2026) — a seconds-long
+backfill against a local node, cached in `/data/epochs.json` (atomic
+write-and-rename, saved every 100 headers so a restart resumes). The cache is
+fully regenerable from the node, so it's a plain JSON file, not SQLite; losing
+`/data` costs one re-backfill. A 30 s tip poll appends a boundary per
+retarget. The projected next adjustment uses the current epoch's average block
+interval (clamped to the consensus ×4/÷4 bounds) — the standard estimator,
+matching what public explorers show.
+
+## Port 4549
+
+Next in the Braiins block after 4547 (agent) and 4548 (Toolbox). Verified free
+against the official store's manifests and compose host ports at the time of
+writing (nearest neighbors: 4533, 4567). Same rule as the others: don't change
+it after release.
+
+## Chart colors are validated, not eyeballed
+
+The dashboard follows the Braiins CDS v11 token conventions established for
+the agent's UI (violet primary, White/Gray-90 themes). Chart data colors are
+deliberately NOT the CDS semantic green/red: difficulty going up is neither
+good nor bad, so the adjustment chart uses a warm/cool diverging pair —
+Carbon blue for increases, Carbon orange for decreases — with blue-60/orange-60
+in light mode and blue-50/orange-50 in dark (the 40-steps sit outside the
+dark-mode lightness band). Both pairs pass the full colorblind-safety
+validation (CVD ΔE ≥ 8 under protanopia/deuteranopia simulation, ≥ 3:1
+contrast against both surfaces). The name "Bitcoin Data" (not "Difficulty")
+is deliberate: the UI shell has a nav slot for future data modules.

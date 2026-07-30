@@ -1,0 +1,129 @@
+# Release for Bitcoin Data. Unlike the agent/toolbox apps there is no upstream
+# feed to watch — the app is this repo's image-bitcoin-data/ sources — so every
+# release is "wrapper-only" and human-triggered from the Actions tab.
+#
+# Two modes, matching wrapper-release.yml:
+#   - version given  → bumps manifest version + releaseNotes + CHANGELOG, so
+#     EXISTING installs get an "Update" badge (Umbrel keys the badge off plain
+#     version inequality; it must change).
+#   - version empty  → digest-only re-pin at the current version. NEW installs
+#     pull the rebuilt image; existing installs get NO badge.
+#
+# Opens a PR (built, smoke-tested, pushed, pinned) for a maintainer to merge —
+# nothing ships to users without a human click.
+
+name: bitcoin-data-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.1.0). Empty = re-pin the digest at the current version (new installs only, no Update badge)."
+        required: false
+        default: ""
+      release_notes:
+        description: "Release notes (Markdown), used when a version is given. Shown in-app and added to CHANGELOG-bitcoin-data.md."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY_OWNER: ${{ github.repository_owner }}
+      IMAGE: ghcr.io/${{ github.repository_owner }}/bitcoin-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version, update manifest + changelog
+        id: rel
+        env:
+          IN_VERSION: ${{ inputs.version }}
+          IN_NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -eu
+          if [ -n "$IN_VERSION" ]; then
+            printf '%s' "$IN_NOTES" > "$RUNNER_TEMP/notes.md"
+            # writes version=<v> to $GITHUB_OUTPUT and fails if unchanged
+            python3 .github/scripts/bump.py release --app bitcoin-data --version "$IN_VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(python3 .github/scripts/bump.py current-version --app bitcoin-data)" >> "$GITHUB_OUTPUT"
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU (arm64)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build amd64 image for smoke test
+        run: docker buildx build --platform linux/amd64 --provenance=false --load --tag smoke-test:local image-bitcoin-data/
+
+      - name: Smoke test
+        run: |
+          set -eux
+          # DEMO_MODE exercises the full pipeline (epoch table, summary,
+          # widget, exports) without a Bitcoin node in CI.
+          docker run -d --name smoke -p 18080:8080 --user 1000:1000 --init -e DEMO_MODE=1 -e APP_VERSION=smoke-version smoke-test:local
+          sleep 3
+          curl -fs http://localhost:18080/api/summary | grep '"status": "demo"'
+          curl -fs http://localhost:18080/api/epochs | grep '"current": true'
+          curl -fs http://localhost:18080/widgets/status | grep '"three-stats"'
+          curl -fs http://localhost:18080/widgets/status | grep '"icon": "activity"'
+          curl -fs http://localhost:18080/export.csv | head -1 | grep '^epoch,'
+          curl -fs http://localhost:18080/ | grep 'Umbrel app smoke-version'
+          # without a node it must degrade gracefully, not crash
+          docker run -d --name smoke-nonode -p 18081:8080 --user 1000:1000 --init smoke-test:local
+          sleep 3
+          curl -fs http://localhost:18081/api/summary | grep '"status": "waiting"'
+          docker logs smoke 2>&1 | tail -5
+          docker rm -f smoke smoke-nonode
+
+      - name: Build and push multi-arch image
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --provenance=false \
+            --tag "$IMAGE:${{ steps.rel.outputs.version }}" \
+            --push image-bitcoin-data/
+
+      - name: Pin multi-arch index digest in compose
+        run: |
+          digest=$(docker buildx imagetools inspect "$IMAGE:${{ steps.rel.outputs.version }}" --format '{{json .Manifest}}' | python3 -c "import json,sys; print(json.load(sys.stdin)['digest'])")
+          python3 .github/scripts/bump.py pin --app bitcoin-data --version "${{ steps.rel.outputs.version }}" --digest "$digest"
+
+      - name: Open release PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: bitcoin-data-release/${{ steps.rel.outputs.version }}
+          commit-message: "Bitcoin Data release ${{ steps.rel.outputs.version }}"
+          title: "Bitcoin Data release ${{ steps.rel.outputs.version }}"
+          body: |
+            Bitcoin Data release (this app has no upstream — see CHANGELOG-bitcoin-data.md).
+
+            Done by this workflow before opening the PR:
+            - image rebuilt from the current `image-bitcoin-data/` sources and smoke-tested (demo mode + no-node degradation)
+            - multi-arch image pushed to `${{ env.IMAGE }}:${{ steps.rel.outputs.version }}`
+            - compose pinned to the new multi-arch index digest
+            ${{ steps.rel.outputs.bumped == 'true' && '- manifest version + releaseNotes bumped and CHANGELOG-bitcoin-data.md entry added → existing installs get an Update badge' || '- manifest version unchanged (digest-only re-pin) → only new installs pull this; existing installs get no Update badge' }}
+
+            Review checklist before merging:
+            - [ ] releaseNotes / CHANGELOG entry read sanely
+            - [ ] update an Umbrel from this branch's store and verify tiles, charts, table, exports, and the widget against the local Bitcoin node
+          delete-branch: true

@@ -1,0 +1,56 @@
+manifestVersion: 1.1
+id: bitcoin-data
+category: bitcoin
+name: Bitcoin Data
+version: "1.0.0"
+tagline: Difficulty epochs, charted from your own Bitcoin node
+description: >-
+  Bitcoin Data reads the blockchain from your own Bitcoin node and presents
+  network statistics — no third-party APIs, everything is computed locally
+  from data you already verified.
+
+  The first module covers mining difficulty: current difficulty, epoch
+  progress with a projected next adjustment and retarget date, estimated
+  network hashrate, difficulty and adjustment charts over the full chain
+  history, and a sortable table of every 2,016-block epoch since genesis.
+  The full history can be exported as CSV or JSON.
+
+  Requires the Bitcoin app. On first start the app reads one block header
+  per difficulty epoch from your node (a few hundred headers, typically
+  done in seconds) and keeps itself current from then on.
+releaseNotes: ""
+developer: Braiins
+website: https://braiins.com
+dependencies:
+  - bitcoin
+repo: https://github.com/tgr-braiins/braiins-umbrel-apps
+support: https://github.com/tgr-braiins/braiins-umbrel-apps/issues
+port: 4549
+icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/bitcoin-data/icon.svg
+gallery:
+  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/bitcoin-data/gallery/1.png
+  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/bitcoin-data/gallery/2.png
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+widgets:
+  - id: "status"
+    type: "three-stats"
+    refresh: "10s"
+    endpoint: "web:8080/widgets/status"
+    link: ""
+    example:
+      type: "three-stats"
+      link: ""
+      items:
+        - icon: "activity"
+          text: "126.4T"
+          subtext: "Difficulty"
+        - icon: "hourglass"
+          text: "60%"
+          subtext: "Epoch 452"
+        - icon: "trending-up"
+          text: "+2.1%"
+          subtext: "Next adjust"
+submitter: Braiins
+submission: ""

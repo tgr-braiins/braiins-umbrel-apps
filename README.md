@@ -9,6 +9,10 @@ Umbrel community app store for [Braiins](https://braiins.com) apps, currently:
   own web GUI: scan your network for ASIC miners, monitor them live, and
   batch-manage pools, power modes, and Braiins OS installs — fully local, no
   cloud account.
+- **Bitcoin Data** — difficulty epoch analytics computed from your own Bitcoin
+  node: current difficulty, projected next adjustment, epoch progress,
+  estimated network hashrate, full-history charts, and a per-epoch table with
+  CSV/JSON export. Requires the official Bitcoin app; no third-party APIs.
 
 > **Status: test/preview.** This store lives on a personal account while we
 > finalize hosting under a Braiins-owned organization. Expect the store URL and
@@ -39,9 +43,14 @@ Design rationale — why the package is built the way it is — lives in
 - `braiins-toolbox/` — the Braiins Toolbox app
 - `image-braiins-toolbox/` — source of the Toolbox Docker image
   (`ghcr.io/tgr-braiins/braiins-toolbox`)
-- `CHANGELOG-braiins-manager-agent.md`, `CHANGELOG-braiins-toolbox.md` —
-  per-app release-notes history (each manifest's `releaseNotes` only holds
-  the current version)
+- `bitcoin-data/` — the Bitcoin Data app
+- `image-bitcoin-data/` — source of the Bitcoin Data Docker image
+  (`ghcr.io/tgr-braiins/bitcoin-data`); the app has no upstream binary — the
+  whole app is `webui.py` (run it locally with `DEMO_MODE=1` for synthetic
+  data, no node needed)
+- `CHANGELOG-braiins-manager-agent.md`, `CHANGELOG-braiins-toolbox.md`,
+  `CHANGELOG-bitcoin-data.md` — per-app release-notes history (each
+  manifest's `releaseNotes` only holds the current version)
 
 ## How the Toolbox image works
 

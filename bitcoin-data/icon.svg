@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="230" fill="#6B50FF"/>
+  <!-- difficulty retarget steps: a rising step-line, the app's chart motif -->
+  <path d="M232 704 L392 512 L392 608 L552 384 L552 480 L712 288 L792 288"
+        stroke="#fff" stroke-width="56" fill="none" stroke-linecap="square"/>
+</svg>

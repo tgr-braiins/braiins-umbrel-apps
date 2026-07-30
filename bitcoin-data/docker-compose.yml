@@ -1,0 +1,28 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: bitcoin-data_web_1
+      APP_PORT: 8080
+
+  web:
+    # TODO: move to a Braiins-owned registry before official-store submission.
+    # The tag@digest is written by bump.py `pin` after the release workflow
+    # pushes the multi-arch image (see .github/workflows/bitcoin-data-release.yml).
+    image: ghcr.io/tgr-braiins/bitcoin-data:1.0.0
+    user: "1000:1000"
+    init: true
+    restart: on-failure
+    stop_grace_period: 30s
+    environment:
+      # Shown in the app's web UI footer. Kept in sync with the manifest
+      # `version` by bump.py.
+      APP_VERSION: "1.0.0"
+      # Exported by the official bitcoin app for dependent apps.
+      BITCOIN_RPC_HOST: $APP_BITCOIN_NODE_IP
+      BITCOIN_RPC_PORT: $APP_BITCOIN_RPC_PORT
+      BITCOIN_RPC_USER: $APP_BITCOIN_RPC_USER
+      BITCOIN_RPC_PASS: $APP_BITCOIN_RPC_PASS
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
