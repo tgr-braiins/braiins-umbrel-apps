@@ -734,7 +734,8 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
 
   <nav class="pagenav" id="pagenav" aria-label="Sections">
     <a href="#overview" class="active">Overview</a>
-    <a href="#calendar">Calendar</a>
+    <a href="#annual">Annual</a>
+    <a href="#monthly">Monthly</a>
     <a href="#records">Records</a>
     <a href="#charts">Charts</a>
     <a href="#projection">Projection</a>
@@ -761,25 +762,26 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
       <div class="sub" id="t-hash-sub">current epoch average</div></div>
     <div class="tile"><div class="label">Hashvalue (1 PH/s)</div>
       <div class="value" id="t-hv">—<small>sats/day</small></div>
-      <div class="sub" id="t-hv-fees"></div>
-      <div class="sub" id="t-hv-sub">subsidy only, fees excluded</div></div>
+      <div class="sub" id="t-hv-sub"></div></div>
     <div class="tile"><div class="label">Halving countdown</div>
       <div class="value" id="t-halv">—<small>blocks</small></div>
       <div class="sub" id="t-halv-sub"></div></div>
   </div>
   </section>
 
-  <section id="calendar">
+  <section id="annual">
   <div class="card">
     <div class="cardhead"><h3>By year</h3></div>
     <div class="statrow" id="growth"></div>
     <div class="tablewrap"><table id="years">
-      <thead><tr><th>Year</th><th>Difficulty on Jan 1</th><th>Exact value</th><th>Change over year</th></tr></thead>
+      <thead><tr><th>Year</th><th>Difficulty on Jan 1</th><th>Exact value</th><th>Est. hashrate</th><th>Change over year</th></tr></thead>
       <tbody></tbody>
     </table></div>
-    <p class="note">Difficulty in effect at 00:00 UTC on Jan 1. The current year shows year-to-date. Click an exact value to copy it.</p>
+    <p class="note">Difficulty in effect at 00:00 UTC on Jan 1; hashrate implied at the 10-minute target. The current year shows year-to-date. Click an exact value to copy it.</p>
   </div>
+  </section>
 
+  <section id="monthly">
   <div class="card">
     <div class="cardhead"><h3>Monthly change</h3>
       <span class="key"><span><i class="pos"></i>Increase</span><span><i class="neg"></i>Decrease</span></span></div>
@@ -802,6 +804,7 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
       </table></div>
     </div>
     <p class="note" id="streaks"></p>
+    <p class="note" id="ath"></p>
   </div>
   </section>
 
@@ -890,6 +893,9 @@ function fmtPct(x, d) {
 function fmtInt(x) { return x == null ? "—" : x.toLocaleString("en-US"); }
 function fmtDate(ts) {
   return ts == null ? "—" : new Date(ts * 1000).toISOString().slice(0, 10);
+}
+function fmtDateTime(ts) {
+  return ts == null ? "—" : new Date(ts * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC";
 }
 function fmtDur(s) {
   if (s == null) return "—";
@@ -987,23 +993,23 @@ function renderTiles() {
   set("t-diff-sub", s.epoch != null ? "epoch " + s.epoch + " · since block " + fmtInt(s.epoch * 2016) : "");
   set("t-proj", fmtPct(s.projected_change, 2));
   set("t-proj-sub", s.remaining != null
-    ? "in " + fmtInt(s.remaining) + " blocks · ~" + fmtDate(s.eta) : "");
+    ? "in " + fmtInt(s.remaining) + " blocks · ~" + fmtDateTime(s.eta) : "");
   set("t-prog", s.progress != null ? (100 * s.progress).toFixed(1) + "%" : "—");
   document.getElementById("t-prog-bar").style.width = s.progress != null ? (100 * s.progress) + "%" : "0";
   set("t-prog-sub", s.elapsed != null ? fmtInt(s.elapsed) + " of 2,016 blocks" : "");
   set("t-hash", fmtHash(s.hashrate));
   set("t-hash-sub", s.avg_interval != null
     ? "avg block " + fmtInterval(s.avg_interval) + " this epoch" : "current epoch average");
+  // fees-inclusive is the headline; subsidy-only only bridges the fee backfill
+  const hvVal = s.hashvalue_with_fees != null ? s.hashvalue_with_fees : s.hashvalue;
   const hv = document.getElementById("t-hv");
   hv.textContent = "";
-  hv.appendChild(document.createTextNode(s.hashvalue != null ? fmtFullInt(s.hashvalue) : "—"));
+  hv.appendChild(document.createTextNode(hvVal != null ? fmtFullInt(hvVal) : "—"));
   const unit = document.createElement("small"); unit.textContent = " sats/day";
   hv.appendChild(unit);
-  set("t-hv-sub", s.subsidy != null
-    ? "subsidy " + s.subsidy + " BTC" : "subsidy only, fees excluded");
-  set("t-hv-fees", s.hashvalue_with_fees != null
-    ? "incl. fees " + fmtFullInt(s.hashvalue_with_fees) +
-      " (" + fmtPct(s.fees_pct_of_reward, 1) + " of reward)" : "");
+  set("t-hv-sub", s.hashvalue_with_fees != null
+    ? "subsidy " + s.subsidy + " BTC + fees " + fmtPct(s.fees_pct_of_reward, 1) + " of reward"
+    : (s.subsidy != null ? "subsidy only — reading this epoch's fees…" : ""));
   const halv = document.getElementById("t-halv");
   halv.textContent = "";
   halv.appendChild(document.createTextNode(s.halving_blocks != null ? fmtInt(s.halving_blocks) : "—"));
@@ -1032,7 +1038,7 @@ function renderRecords() {
       c1.appendChild(dot);
       c1.appendChild(document.createTextNode(fmtPct(r.change)));
       const c2 = document.createElement("td");
-      c2.textContent = String(r.epoch) + (r.current ? " · now" : "");
+      c2.textContent = String(r.epoch);
       const c3 = document.createElement("td"); c3.textContent = fmtDate(r.start_time);
       tr.append(c1, c2, c3);
       tb.appendChild(tr);
@@ -1052,6 +1058,25 @@ function renderRecords() {
     "Current streak: " + cur + " consecutive " + (prevSign >= 0 ? "increases" : "decreases") +
     ". Record: " + best + " consecutive increases, ending " + fmtDate(bestEnd.start_time) +
     ". The in-progress epoch counts — its adjustment was fixed at the last retarget.";
+  // longest stretch without a new all-time-high difficulty
+  let ath = -Infinity, lastAth = null, rec = 0, recFrom = null, recTo = null;
+  for (const r of S.rows) {
+    if (r.difficulty > ath) {
+      ath = r.difficulty;
+      if (lastAth != null && r.start_time - lastAth > rec) {
+        rec = r.start_time - lastAth; recFrom = lastAth; recTo = r.start_time;
+      }
+      lastAth = r.start_time;
+    }
+  }
+  const curGap = tipTime() - lastAth;
+  const days = t => Math.round(t / 86400) + " days";
+  document.getElementById("ath").textContent = curGap > rec
+    ? "Longest wait for a new difficulty ATH: " + days(curGap) +
+      " — ongoing since " + fmtDate(lastAth) + ", an all-time record."
+    : "Longest wait for a new difficulty ATH: " + days(rec) +
+      " (" + fmtDate(recFrom) + " → " + fmtDate(recTo) + "). Currently " +
+      days(curGap) + " since the last ATH.";
 }
 
 // -- growth: CAGR over trailing windows + doubling time -------------------------
@@ -1153,6 +1178,9 @@ function renderCalendar() {
     exact.title = "Click to copy " + Math.round(start);
     exact.addEventListener("click", () => copyText(String(Math.round(start)), exact));
     tr.appendChild(exact);
+    const hr = document.createElement("td");
+    hr.textContent = fmtHash(start * 4294967296 / 600);  // implied by difficulty
+    tr.appendChild(hr);
     const ch = document.createElement("td");
     changeCell(ch, end / start - 1, ytd ? " YTD" : "");
     tr.appendChild(ch);
@@ -1396,7 +1424,7 @@ function drawAdj() {
 
 // -- table ---------------------------------------------------------------------
 const COLS = [
-  { key: "epoch", label: "Epoch", fmt: r => String(r.epoch) + (r.current ? " · now" : "") },
+  { key: "epoch", label: "Epoch", fmt: r => String(r.epoch) },
   { key: "start_height", label: "Start height", fmt: r => fmtInt(r.start_height) },
   { key: "start_time", label: "Start (UTC)", fmt: r => fmtDate(r.start_time) },
   { key: "end_time", label: "End (UTC)", fmt: r => r.current ? "in progress" : fmtDate(r.end_time) },
@@ -1405,7 +1433,7 @@ const COLS = [
   { key: "difficulty", label: "Difficulty", fmt: r => fmtCompact(r.difficulty, 2) },
   { key: "change", label: "Change", fmt: null },   // rendered with a direction dot
   { key: "hashrate", label: "Est. hashrate", fmt: r => fmtHash(r.hashrate) },
-  { key: "hashvalue", label: "Hashvalue", fmt: r => fmtCompact(r.hashvalue, 1) + " sats" },
+  { key: "hashvalue", label: "Hashvalue (sats)", fmt: r => fmtFullInt(r.hashvalue) },
 ];
 function durOf(r) {
   return r.avg_interval != null && r.blocks ? r.avg_interval * r.blocks : null;
