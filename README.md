@@ -56,10 +56,20 @@ release feed checks). All state (device list IP sources, pool presets, logs)
 lives under `$HOME`, which the image sets to the `/data` volume.
 
 Build, push, and release mechanics are the same as for the agent image below
-(multi-arch buildx, public ghcr package, digest pinned in compose), except
-version bumps are currently manual — bump `TOOLBOX_VERSION` + the two
-checksums in the Dockerfile (both from the feed), rebuild/push, pin the new
-digest, bump the manifest `version`.
+(multi-arch buildx, public ghcr package, digest pinned in compose), and the
+release flow has the same automation twins: `toolbox-update.yml` polls the
+Toolbox feed daily and opens a ready-made bump PR, and
+`toolbox-wrapper-release.yml` ships packaging-only changes. Both drive
+`.github/scripts/bump.py` with `--app toolbox`; release-notes history lives in
+`CHANGELOG-braiins-toolbox.md`. Manual fallback: bump `TOOLBOX_VERSION` + the
+two checksums in the Dockerfile (both from the feed), rebuild/push, pin the
+new digest, bump the manifest `version`.
+
+One deliberate difference from the agent: Toolbox **wrapper versions are a
+revision of the current upstream version** (`26.06-1`, `26.06-2`, …), not a
+pre-release of the next patch, because Toolbox's CalVer patch releases
+(`26.06.1`) are real upstream versions we must not impersonate. See
+DECISIONS.md for the ordering rationale.
 
 ## How the agent image works
 
@@ -141,6 +151,11 @@ An app install/update **always pulls the image from ghcr** — push the image
 before bumping the compose tag, or the install fails.
 
 ## Release flow
+
+This section describes the **agent** flow; the Toolbox app has identical
+twin workflows (`toolbox-update.yml`, `toolbox-wrapper-release.yml`) driving
+the same `bump.py` with `--app toolbox` — see "How the Toolbox image works"
+above for the one versioning difference.
 
 Automated: `.github/workflows/agent-update.yml` polls the release feed daily
 and opens a ready-made bump PR (image built, smoke-tested, pushed, digest
