@@ -75,7 +75,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build amd64 image for smoke test
-        run: docker buildx build --platform linux/amd64 --provenance=false --load --tag smoke-test:local image/
+        run: docker buildx build --platform linux/amd64 --provenance=false --load --tag smoke-test:local image-braiins-manager-agent/
 
       - name: Smoke test
         run: |
@@ -98,7 +98,7 @@ jobs:
             --platform linux/amd64,linux/arm64 \
             --provenance=false \
             --tag "$IMAGE:${{ steps.rel.outputs.version }}" \
-            --push image/
+            --push image-braiins-manager-agent/
 
       - name: Pin multi-arch index digest in compose
         run: |
@@ -115,7 +115,7 @@ jobs:
             Manual wrapper-only release (no new Braiins Manager Agent version).
 
             Done by this workflow before opening the PR:
-            - image rebuilt from the current `image/` sources (agent binary unchanged) and smoke-tested
+            - image rebuilt from the current `image-braiins-manager-agent/` sources (agent binary unchanged) and smoke-tested
             - multi-arch image pushed to `${{ env.IMAGE }}:${{ steps.rel.outputs.version }}`
             - compose pinned to the new multi-arch index digest
             ${{ steps.rel.outputs.bumped == 'true' && '- manifest version + releaseNotes bumped and CHANGELOG.md entry added → existing installs get an Update badge' || '- manifest version unchanged (digest-only re-pin) → only new installs pull this; existing installs get no Update badge' }}

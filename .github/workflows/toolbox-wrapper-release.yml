@@ -1,0 +1,125 @@
+# Manual release for WRAPPER-ONLY changes to the Braiins Toolbox package —
+# i.e. changes to this repo (Dockerfile, compose, manifest, docs) with NO new
+# Toolbox version. The daily toolbox-update.yml only fires when upstream ships
+# a new Toolbox, so it never ships these; this is the human-triggered path.
+#
+# Trigger it from the Actions tab (workflow_dispatch). Two modes:
+#   - version given  → bumps manifest version + releaseNotes + changelog, so
+#     EXISTING installs get an "Update" badge. Toolbox wrapper versions are a
+#     debian-style revision of the CURRENT upstream version (e.g. "26.06-1",
+#     then "26.06-2") — unlike the agent's next-patch scheme, because Toolbox
+#     CalVer patch releases (26.06.1) are real upstream versions we must not
+#     impersonate. umbrelOS shows the badge on version INEQUALITY, so any
+#     changed version works; the revision scheme keeps ordering sane for the
+#     feed check in bump.py.
+#   - version empty  → digest-only re-pin at the current version. NEW installs
+#     pull the rebuilt image; existing installs get NO badge (unchanged version).
+#
+# Like toolbox-update.yml it opens a PR (built, smoke-tested, pushed, pinned)
+# for a maintainer to merge — nothing ships to users without a human click.
+
+name: toolbox-wrapper-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 26.06-1). Empty = re-pin the digest at the current version (new installs only, no Update badge)."
+        required: false
+        default: ""
+      release_notes:
+        description: "Release notes (Markdown), used when a version is given. Shown in-app and added to CHANGELOG-braiins-toolbox.md."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY_OWNER: ${{ github.repository_owner }}
+      IMAGE: ghcr.io/${{ github.repository_owner }}/braiins-toolbox
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version, update manifest + changelog
+        id: rel
+        env:
+          IN_VERSION: ${{ inputs.version }}
+          IN_NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -eu
+          if [ -n "$IN_VERSION" ]; then
+            printf '%s' "$IN_NOTES" > "$RUNNER_TEMP/notes.md"
+            # writes version=<v> to $GITHUB_OUTPUT and fails if unchanged
+            python3 .github/scripts/bump.py release --app toolbox --version "$IN_VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(python3 .github/scripts/bump.py current-version --app toolbox)" >> "$GITHUB_OUTPUT"
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU (arm64)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build amd64 image for smoke test
+        run: docker buildx build --platform linux/amd64 --provenance=false --load --tag smoke-test:local image-braiins-toolbox/
+
+      - name: Smoke test
+        run: |
+          set -eux
+          docker run --rm --user 1000:1000 smoke-test:local --version | grep -F 'braiins-toolbox'
+          docker run -d --name smoke -p 18888:8888 --user 1000:1000 --init smoke-test:local
+          sleep 5
+          curl -fs http://localhost:18888/ | grep -F '<title>Braiins Toolbox</title>'
+          docker logs smoke 2>&1 | grep -F 'server listening'
+          docker rm -f smoke
+
+      - name: Build and push multi-arch image
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --provenance=false \
+            --tag "$IMAGE:${{ steps.rel.outputs.version }}" \
+            --push image-braiins-toolbox/
+
+      - name: Pin multi-arch index digest in compose
+        run: |
+          digest=$(docker buildx imagetools inspect "$IMAGE:${{ steps.rel.outputs.version }}" --format '{{json .Manifest}}' | python3 -c "import json,sys; print(json.load(sys.stdin)['digest'])")
+          python3 .github/scripts/bump.py pin --app toolbox --version "${{ steps.rel.outputs.version }}" --digest "$digest"
+
+      - name: Open release PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: toolbox-wrapper-release/${{ steps.rel.outputs.version }}
+          commit-message: "Toolbox wrapper release ${{ steps.rel.outputs.version }}"
+          title: "Toolbox wrapper release ${{ steps.rel.outputs.version }}"
+          body: |
+            Manual wrapper-only release (no new Braiins Toolbox version).
+
+            Done by this workflow before opening the PR:
+            - image rebuilt from the current `image-braiins-toolbox/` sources (Toolbox binary unchanged) and smoke-tested
+            - multi-arch image pushed to `${{ env.IMAGE }}:${{ steps.rel.outputs.version }}`
+            - compose pinned to the new multi-arch index digest
+            ${{ steps.rel.outputs.bumped == 'true' && '- manifest version + releaseNotes bumped and CHANGELOG-braiins-toolbox.md entry added → existing installs get an Update badge' || '- manifest version unchanged (digest-only re-pin) → only new installs pull this; existing installs get no Update badge' }}
+
+            Review checklist before merging:
+            - [ ] releaseNotes / changelog entry read sanely
+            - [ ] update an Umbrel from this branch's store and verify the Device List still scans
+          delete-branch: true

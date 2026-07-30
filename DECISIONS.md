@@ -180,7 +180,7 @@ Semantic tokens re-resolve between the White and Gray 90 themes via
 (brand), a deliberate override of the token file's blue-60; links keep the
 CDS blue link tokens. Braiins Sans (regular + bold
 WOFF2, converted from the public visualbook OTFs at
-design.braiins.com/braiins/typography) is committed under `image/fonts/`,
+design.braiins.com/braiins/typography) is committed under `image-braiins-manager-agent/fonts/`,
 baked into the image, and served by `webui.py` itself: an Umbrel box must not
 depend on a Braiins web host to render its local setup page, and phoning an
 external CDN from a self-hosted node is exactly what Umbrel users install
@@ -252,3 +252,25 @@ Toolbox prompts for non-default miner passwords in the GUI per session/action
 (`-p` on the CLI); it does not persist credentials to disk in the current
 setup. Nothing password-shaped lands in `/data` — if a future version adds a
 credential store, revisit backup and permissions handling then.
+
+## Wrapper versions are revisions (26.06-1), not next-patch pre-releases
+
+The agent's wrapper scheme fakes a pre-release of the *next* patch
+(`4.11.1-1` while shipping agent 4.11.0) so a real upstream 4.11.1 supersedes
+it under semver. Toolbox deliberately diverges: upstream is CalVer and *does*
+publish real patch releases (`23.04.1`), so a fabricated `26.06.1-1` would
+read as an upstream hotfix that doesn't exist. Toolbox wrapper releases are
+debian-style revisions of the version actually shipped: `26.06-1`, `26.06-2`.
+
+Two facts make this safe (both verified in source, umbrel master @ 2026-07):
+
+- umbrelOS shows the Update badge on plain version **inequality**
+  (`ui/src/hooks/use-apps-with-updates.ts`: `availableApp.version !==
+  app.version`) — no ordering, no semver. Any changed string triggers it.
+- Ordering only matters inside our own `bump.py` feed check ("is upstream
+  newer than the manifest?"). There, per-app rules apply: for toolbox a
+  suffixed version sorts *above* its plain core and *below* the next upstream
+  version (`26.06 < 26.06-1 < 26.06.1 < 26.07`); for the agent the suffix
+  sorts *below* its core, preserving its next-patch scheme. Without the
+  toolbox rule, a wrapper release `26.06-1` would make the daily feed check
+  see plain `26.06` as "newer" and open a spurious downgrade PR.

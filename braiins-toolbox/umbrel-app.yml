@@ -1,5 +1,5 @@
 manifestVersion: 1
-id: braiins-braiins-toolbox
+id: braiins-toolbox
 category: bitcoin
 name: Braiins Toolbox
 version: "26.06"
@@ -28,10 +28,10 @@ repo: https://github.com/tgr-braiins/braiins-umbrel-apps
 support: https://academy.braiins.com/braiins-toolbox
 
 port: 4548
-icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-toolbox/icon.svg
+icon: https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-toolbox/icon.svg
 gallery:
-  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-toolbox/gallery/1.png
-  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-braiins-toolbox/gallery/2.png
+  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-toolbox/gallery/1.png
+  - https://raw.githubusercontent.com/tgr-braiins/braiins-umbrel-apps/main/braiins-toolbox/gallery/2.png
 path: ""
 
 defaultUsername: ""

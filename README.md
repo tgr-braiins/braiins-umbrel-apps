@@ -32,11 +32,11 @@ Design rationale — why the package is built the way it is — lives in
 ## Repo layout
 
 - `umbrel-app-store.yml` — store manifest (store id `braiins`)
-- `braiins-braiins-manager-agent/` — the Braiins Manager Agent app: manifest
+- `braiins-manager-agent/` — the Braiins Manager Agent app: manifest
   (`umbrel-app.yml`), `docker-compose.yml`, `icon.svg`
-- `image/` — source of the agent Docker image
+- `image-braiins-manager-agent/` — source of the agent Docker image
   (`ghcr.io/tgr-braiins/braiins-manager-agent`)
-- `braiins-braiins-toolbox/` — the Braiins Toolbox app
+- `braiins-toolbox/` — the Braiins Toolbox app
 - `image-braiins-toolbox/` — source of the Toolbox Docker image
   (`ghcr.io/tgr-braiins/braiins-toolbox`)
 - `CHANGELOG.md` — Braiins Manager Agent release notes history (the manifest's
@@ -56,10 +56,20 @@ release feed checks). All state (device list IP sources, pool presets, logs)
 lives under `$HOME`, which the image sets to the `/data` volume.
 
 Build, push, and release mechanics are the same as for the agent image below
-(multi-arch buildx, public ghcr package, digest pinned in compose), except
-version bumps are currently manual — bump `TOOLBOX_VERSION` + the two
-checksums in the Dockerfile (both from the feed), rebuild/push, pin the new
-digest, bump the manifest `version`.
+(multi-arch buildx, public ghcr package, digest pinned in compose), and the
+release flow has the same automation twins: `toolbox-update.yml` polls the
+Toolbox feed daily and opens a ready-made bump PR, and
+`toolbox-wrapper-release.yml` ships packaging-only changes. Both drive
+`.github/scripts/bump.py` with `--app toolbox`; release-notes history lives in
+`CHANGELOG-braiins-toolbox.md`. Manual fallback: bump `TOOLBOX_VERSION` + the
+two checksums in the Dockerfile (both from the feed), rebuild/push, pin the
+new digest, bump the manifest `version`.
+
+One deliberate difference from the agent: Toolbox **wrapper versions are a
+revision of the current upstream version** (`26.06-1`, `26.06-2`, …), not a
+pre-release of the next patch, because Toolbox's CalVer patch releases
+(`26.06.1`) are real upstream versions we must not impersonate. See
+DECISIONS.md for the ordering rationale.
 
 ## How the agent image works
 
@@ -68,12 +78,12 @@ signed release `.deb` from the public feed
 (`https://downloads.braiins.com/braiins-manager-agent/index.json`), verifies its
 sha256, and extracts the `bma-daemon` binary. On top of that it adds:
 
-- `image/webui.py` — stdlib-only Python on :8080: the config page where the
+- `image-braiins-manager-agent/webui.py` — stdlib-only Python on :8080: the config page where the
   user enters the Agent ID / Secret key (written to `/data/daemon.yaml`, mode
   0600), `/status` (JSON for the page's live stats — miner count and telemetry
   activity parsed from the daemon log), and `/widgets/status` (Umbrel
   home-screen widget)
-- `image/entrypoint.sh` — supervisor that starts the daemon once the config
+- `image-braiins-manager-agent/entrypoint.sh` — supervisor that starts the daemon once the config
   exists and restarts it when the config changes; the daemon log is kept as a
   real file for the stats parsing, mirrored to `docker logs`, size-capped
 
@@ -85,7 +95,7 @@ removed on uninstall.
 ### Build and smoke-test locally
 
 ```bash
-cd image
+cd image-braiins-manager-agent
 docker build -t bma-umbrel-dev .          # plain build gives amd64 (TARGETARCH defaults); use buildx for arm64
 docker run -d --name bma-dev --user 1000:1000 --init -p 18080:8080 -v bma-dev-data:/data bma-umbrel-dev  # mirror prod: unprivileged uid
 curl http://localhost:18080/status         # {"configured": false, "running": false}
@@ -106,7 +116,7 @@ public** (umbreld pulls anonymously). You need a GitHub PAT with
 
 ```bash
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
-cd image
+cd image-braiins-manager-agent
 docker buildx create --use                 # once; QEMU needed for arm64 on x86 hosts:
 docker run --privileged --rm tonistiigi/binfmt --install arm64
 docker buildx build \
@@ -119,7 +129,7 @@ docker buildx build \
 ```
 
 Use the upstream agent version from `umbrel-app.yml` as the tag (e.g. `4.10.0`), then pin the index digest in `docker-compose.yml`.
-`image/.gitlab-ci.yml` automates exactly this; wire it into CI when the repo
+`image-braiins-manager-agent/.gitlab-ci.yml` automates exactly this; wire it into CI when the repo
 finds its final home.
 
 ### Test on a real Umbrel
@@ -130,11 +140,11 @@ refresh, SSH in (`ssh umbrel@umbrel.local`, dashboard password) and run:
 
 ```bash
 cd umbrel/app-stores/<this-store-dir> && git pull
-umbreld client apps.update.mutate --appId braiins-braiins-manager-agent
+umbreld client apps.update.mutate --appId braiins-manager-agent
 # state check:
-umbreld client apps.state.query --appId braiins-braiins-manager-agent
+umbreld client apps.state.query --appId braiins-manager-agent
 # container logs (needs sudo):
-sudo docker logs braiins-braiins-manager-agent_web_1
+sudo docker logs braiins-manager-agent_web_1
 ```
 
 An app install/update **always pulls the image from ghcr** — push the image
@@ -142,16 +152,21 @@ before bumping the compose tag, or the install fails.
 
 ## Release flow
 
+This section describes the **agent** flow; the Toolbox app has identical
+twin workflows (`toolbox-update.yml`, `toolbox-wrapper-release.yml`) driving
+the same `bump.py` with `--app toolbox` — see "How the Toolbox image works"
+above for the one versioning difference.
+
 Automated: `.github/workflows/agent-update.yml` polls the release feed daily
 and opens a ready-made bump PR (image built, smoke-tested, pushed, digest
 pinned) — a maintainer reviews and merges. It performs exactly the manual
 steps below; the manual flow remains the fallback and the source of truth.
 
 1. New agent version is published to the public download feed.
-2. Bump `BMA_VERSION` and the per-arch `.deb` checksums in `image/Dockerfile`.
+2. Bump `BMA_VERSION` and the per-arch `.deb` checksums in `image-braiins-manager-agent/Dockerfile`.
 3. Build + push the multi-arch image, tagged with the upstream agent version:
-   `docker buildx build --platform linux/amd64,linux/arm64 --tag <registry>/braiins-manager-agent:<X.Y.Z> --push image/`
-   (`image/.gitlab-ci.yml` is a reference pipeline for automating this).
+   `docker buildx build --platform linux/amd64,linux/arm64 --tag <registry>/braiins-manager-agent:<X.Y.Z> --push image-braiins-manager-agent/`
+   (`image-braiins-manager-agent/.gitlab-ci.yml` is a reference pipeline for automating this).
 4. Pin the **multi-arch index digest** in `docker-compose.yml`
    (`tag@sha256:…` — get it from `docker buildx imagetools inspect <image>:<tag>`),
    bump `version` in `umbrel-app.yml`, push this repo.
@@ -164,7 +179,7 @@ Changes to this repo that don't correspond to a new agent release (the web UI,
 entrypoint, widget, docs) never ship through `agent-update.yml` — it only fires
 when upstream publishes a newer agent. Ship them with the manual
 `.github/workflows/wrapper-release.yml` (Actions tab → **wrapper-release** →
-Run workflow). It rebuilds `image/` (agent binary unchanged), smoke-tests,
+Run workflow). It rebuilds `image-braiins-manager-agent/` (agent binary unchanged), smoke-tests,
 pushes, pins the new digest, and opens a PR — same review gate as the automated
 flow. Two modes, chosen by the `version` input:
 
@@ -177,7 +192,7 @@ flow. Two modes, chosen by the `version` input:
 - **Leave it empty** → digest-only re-pin at the current version. New installs
   pull the rebuilt image; existing installs get **no** badge (version unchanged).
   Force it onto a test device with
-  `umbreld client apps.update.mutate --appId braiins-braiins-manager-agent`.
+  `umbreld client apps.update.mutate --appId braiins-manager-agent`.
 
 ## Compliance with the official Umbrel App Store
 
@@ -204,8 +219,8 @@ uniqueness, image pinning/multi-arch, compose wiring):
 
 ```bash
 git clone --depth 1 https://github.com/getumbrel/umbrel-apps /tmp/umbrel-apps
-cp -r braiins-braiins-manager-agent /tmp/umbrel-apps/
-cd /tmp/umbrel-apps && npm ci && npm run lint:apps -- braiins-braiins-manager-agent --check-images
+cp -r braiins-manager-agent /tmp/umbrel-apps/
+cd /tmp/umbrel-apps && npm ci && npm run lint:apps -- braiins-manager-agent --check-images
 ```
 
 Known intentional deviations (community store vs. official submission):
