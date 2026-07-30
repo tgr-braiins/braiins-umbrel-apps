@@ -3,14 +3,14 @@ version: "3.7"
 services:
   app_proxy:
     environment:
-      APP_HOST: bitcoin-data_web_1
+      APP_HOST: braiins-bitcoin-data_web_1
       APP_PORT: 8080
 
   web:
     # TODO: move to a Braiins-owned registry before official-store submission.
     # The tag@digest is written by bump.py `pin` after the release workflow
-    # pushes the multi-arch image (see .github/workflows/bitcoin-data-release.yml).
-    image: ghcr.io/tgr-braiins/bitcoin-data:1.0.0@sha256:71f66c5da2f6542c19b551bd967900013929fe51cd615ea11b75ecc4e30343be
+    # pushes the multi-arch image (see .github/workflows/braiins-bitcoin-data-release.yml).
+    image: ghcr.io/tgr-braiins/braiins-bitcoin-data:1.0.0@sha256:71f66c5da2f6542c19b551bd967900013929fe51cd615ea11b75ecc4e30343be
     user: "1000:1000"
     init: true
     restart: on-failure

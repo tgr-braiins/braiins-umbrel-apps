@@ -277,14 +277,23 @@ Two facts make this safe (both verified in source, umbrel master @ 2026-07):
 
 # Bitcoin Data package
 
+## App id is `braiins-bitcoin-data`, not `bitcoin-data`
+
+umbreld silently filters community-store apps whose id doesn't start with the
+store id (`app-repository.ts`: `app.id.startsWith(meta.id)`, store id
+`braiins`) — the app cloned fine on the device but never appeared in the store
+UI, with nothing in the logs. Every app in this store must be `braiins-*`.
+The 1.0.0 release initially shipped as `bitcoin-data` and hit exactly this;
+the display name stays "Bitcoin Data".
+
 ## No upstream — the repo is the app
 
 Unlike the agent and Toolbox, Bitcoin Data packages no Braiins binary: the
-entire app is `image-bitcoin-data/webui.py` (stdlib-only Python, same pattern
+entire app is `image-braiins-bitcoin-data/webui.py` (stdlib-only Python, same pattern
 as the agent's config UI) plus the locally served Braiins Sans fonts. There is
 therefore no release feed, no `check` in `bump.py` (its `feed` is `None`), and
 no daily update workflow — releases are human-triggered via
-`bitcoin-data-release.yml`, and versions are plain semver (`1.0.0`) with no
+`braiins-bitcoin-data-release.yml`, and versions are plain semver (`1.0.0`) with no
 wrapper-suffix scheme, since every release is by definition a wrapper release.
 
 ## All data comes from the user's own node

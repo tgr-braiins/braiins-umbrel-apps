@@ -1,5 +1,5 @@
 # Release for Bitcoin Data. Unlike the agent/toolbox apps there is no upstream
-# feed to watch — the app is this repo's image-bitcoin-data/ sources — so every
+# feed to watch — the app is this repo's image-braiins-bitcoin-data/ sources — so every
 # release is "wrapper-only" and human-triggered from the Actions tab.
 #
 # Two modes, matching wrapper-release.yml:
@@ -12,7 +12,7 @@
 # Opens a PR (built, smoke-tested, pushed, pinned) for a maintainer to merge —
 # nothing ships to users without a human click.
 
-name: bitcoin-data-release
+name: braiins-bitcoin-data-release
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ on:
         required: false
         default: ""
       release_notes:
-        description: "Release notes (Markdown), used when a version is given. Shown in-app and added to CHANGELOG-bitcoin-data.md."
+        description: "Release notes (Markdown), used when a version is given. Shown in-app and added to CHANGELOG-braiins-bitcoin-data.md."
         required: false
         default: ""
 
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       REGISTRY_OWNER: ${{ github.repository_owner }}
-      IMAGE: ghcr.io/${{ github.repository_owner }}/bitcoin-data
+      IMAGE: ghcr.io/${{ github.repository_owner }}/braiins-bitcoin-data
     steps:
       - uses: actions/checkout@v4
 
@@ -50,10 +50,10 @@ jobs:
           if [ -n "$IN_VERSION" ]; then
             printf '%s' "$IN_NOTES" > "$RUNNER_TEMP/notes.md"
             # writes version=<v> to $GITHUB_OUTPUT and fails if unchanged
-            python3 .github/scripts/bump.py release --app bitcoin-data --version "$IN_VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+            python3 .github/scripts/bump.py release --app braiins-bitcoin-data --version "$IN_VERSION" --notes-file "$RUNNER_TEMP/notes.md"
             echo "bumped=true" >> "$GITHUB_OUTPUT"
           else
-            echo "version=$(python3 .github/scripts/bump.py current-version --app bitcoin-data)" >> "$GITHUB_OUTPUT"
+            echo "version=$(python3 .github/scripts/bump.py current-version --app braiins-bitcoin-data)" >> "$GITHUB_OUTPUT"
             echo "bumped=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -73,7 +73,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build amd64 image for smoke test
-        run: docker buildx build --platform linux/amd64 --provenance=false --load --tag smoke-test:local image-bitcoin-data/
+        run: docker buildx build --platform linux/amd64 --provenance=false --load --tag smoke-test:local image-braiins-bitcoin-data/
 
       - name: Smoke test
         run: |
@@ -101,27 +101,27 @@ jobs:
             --platform linux/amd64,linux/arm64 \
             --provenance=false \
             --tag "$IMAGE:${{ steps.rel.outputs.version }}" \
-            --push image-bitcoin-data/
+            --push image-braiins-bitcoin-data/
 
       - name: Pin multi-arch index digest in compose
         run: |
           digest=$(docker buildx imagetools inspect "$IMAGE:${{ steps.rel.outputs.version }}" --format '{{json .Manifest}}' | python3 -c "import json,sys; print(json.load(sys.stdin)['digest'])")
-          python3 .github/scripts/bump.py pin --app bitcoin-data --version "${{ steps.rel.outputs.version }}" --digest "$digest"
+          python3 .github/scripts/bump.py pin --app braiins-bitcoin-data --version "${{ steps.rel.outputs.version }}" --digest "$digest"
 
       - name: Open release PR
         uses: peter-evans/create-pull-request@v7
         with:
-          branch: bitcoin-data-release/${{ steps.rel.outputs.version }}
+          branch: braiins-bitcoin-data-release/${{ steps.rel.outputs.version }}
           commit-message: "Bitcoin Data release ${{ steps.rel.outputs.version }}"
           title: "Bitcoin Data release ${{ steps.rel.outputs.version }}"
           body: |
-            Bitcoin Data release (this app has no upstream — see CHANGELOG-bitcoin-data.md).
+            Bitcoin Data release (this app has no upstream — see CHANGELOG-braiins-bitcoin-data.md).
 
             Done by this workflow before opening the PR:
-            - image rebuilt from the current `image-bitcoin-data/` sources and smoke-tested (demo mode + no-node degradation)
+            - image rebuilt from the current `image-braiins-bitcoin-data/` sources and smoke-tested (demo mode + no-node degradation)
             - multi-arch image pushed to `${{ env.IMAGE }}:${{ steps.rel.outputs.version }}`
             - compose pinned to the new multi-arch index digest
-            ${{ steps.rel.outputs.bumped == 'true' && '- manifest version + releaseNotes bumped and CHANGELOG-bitcoin-data.md entry added → existing installs get an Update badge' || '- manifest version unchanged (digest-only re-pin) → only new installs pull this; existing installs get no Update badge' }}
+            ${{ steps.rel.outputs.bumped == 'true' && '- manifest version + releaseNotes bumped and CHANGELOG-braiins-bitcoin-data.md entry added → existing installs get an Update badge' || '- manifest version unchanged (digest-only re-pin) → only new installs pull this; existing installs get no Update badge' }}
 
             Review checklist before merging:
             - [ ] releaseNotes / CHANGELOG entry read sanely
