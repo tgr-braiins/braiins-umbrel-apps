@@ -231,6 +231,48 @@ Known intentional deviations (community store vs. official submission):
   screenshots/logo go in the PR body (Umbrel hosts final assets).
 - `submission: ""` — becomes the PR URL at official submission time.
 
+### Path to the official App Store
+
+The submission checklist, per app. Process: fork
+[getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps), add the app
+directory, pass their linter clean, open the PR, iterate with reviewers;
+post-acceptance, app updates are PRs to their repo (our bump workflows need a
+variant targeting it).
+
+Infrastructure first (once):
+
+1. Move this repo and both ghcr images to a Braiins-owned org/registry
+   (`# TODO` markers in both compose files); update `REGISTRY_OWNER` in the
+   workflows; keep packages public and digest-pinned.
+
+Package changes for the submission PR:
+
+2. Remove committed `icon.svg` + `gallery/`; drop manifest `icon:` and set
+   `gallery: []` (assets go in the PR body).
+3. Set `submission:` to the actual PR URL — this clears the two standing
+   linter errors.
+4. Re-verify ports 4547/4548 are still unclaimed in the official store at
+   submission time (static claims, no conflict detection).
+5. Retire (or re-id) the community listing when the official app lands: the
+   app ids are already official-store-shaped, and umbrel keys available apps
+   by id — a user with both stores added would get a collision.
+
+Evidence the review expects (see the `umbrel-test-app` skill):
+
+6. Fresh install through Umbrel on stated hardware, **including an arm64
+   runtime test** (currently untested), restart + persistence, the main
+   workflow exercised, screenshots + logo attached to the PR body.
+
+Known review friction — have answers ready:
+
+7. Closed-source binaries: official signed artifacts from the public feed,
+   sha256-verified in the Dockerfile, image rebuildable by anyone from public
+   artifacts (see DECISIONS.md).
+8. Unauthenticated `web:` ports on the shared Docker network (accepted-risk
+   entries in DECISIONS.md): the durable fixes are product-level — a GUI auth
+   option in Toolbox, a secret-key-overwrite guard in the agent — and should
+   ideally ship before or alongside official submission.
+
 ## Notes for developers picking this up
 
 - **Umbrel constraints** (learned by testing on real hardware):
@@ -242,8 +284,7 @@ Known intentional deviations (community store vs. official submission):
     `icon` must be an http(s) URL.
   - Bridge networking is sufficient; miner discovery is range-based TCP
     scanning, no host networking needed.
-- **TODO before GA**: move repo + image to a Braiins-owned org/registry;
-  wire the image build + version bump into the agent release pipeline;
-  submit to the official Umbrel app store (getumbrel/umbrel-apps) — the
-  package already passes their linter except the intentional deviations
-  listed above.
+- **TODO before GA**: see "Path to the official App Store" above for the full
+  submission checklist; independent of it, wire the image builds + version
+  bumps into the Braiins release pipelines (event-driven `repository_dispatch`
+  instead of daily polling).
