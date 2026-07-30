@@ -4,9 +4,12 @@ Serves on :8080 (fronted by Umbrel's app_proxy):
 - GET  /                dashboard: summary tiles, calendar views, records,
                         difficulty + adjustment charts, projection, epoch table
                         with export; styled per Braiins CDS v11
+- GET  /signalling      BIP-110 signalling page: window counts, strip chart,
+                        recent signalling blocks
 - GET  /api             human-readable API documentation
 - GET  /api/summary     JSON polled by the page: node state + current-epoch stats
 - GET  /api/epochs      JSON: one row per difficulty epoch (all history)
+- GET  /api/signalling  JSON: BIP-110 bit-4 counts per window + last 288 blocks
 - GET  /export.csv      epoch table as CSV
 - GET  /export.json     epoch table as JSON
 - GET  /widgets/status  Umbrel home-screen widget (three-stats)
@@ -48,6 +51,16 @@ EPOCH_BLOCKS = 2016
 TARGET_INTERVAL = 600  # seconds per block the retarget aims for
 TWO32 = 2 ** 32
 HALVING_BLOCKS = 210000
+
+# BIP-110 signals version bit 4 (BIP9-style: top bits 001), lock-in at 55% of
+# a 2,016-block retarget period = 1,109 blocks. Bit overridable for future BIPs.
+SIGNAL_BIT = int(os.environ.get("SIGNAL_BIT", "4"))
+SIGNAL_THRESHOLD = 1109
+SIGNAL_WINDOWS = (18, 36, 72, 144, 288)
+
+
+def signals(version):
+    return (version >> 29) == 1 and (version >> SIGNAL_BIT) & 1 == 1
 
 
 def subsidy_btc(height):
@@ -105,6 +118,7 @@ STATE = {
     "verification": 1.0,
     "backfill": None,       # (done, total) while backfilling, else None
     "fees": {},             # height -> totalfee sats, current epoch only
+    "versions": {},         # height -> (time, version), last 2016 blocks
 }
 
 
@@ -113,15 +127,17 @@ def load_cache():
         with open(CACHE) as f:
             data = json.load(f)
         fees = {int(k): v for k, v in data.get("fees", {}).items()}
-        return data.get("chain"), [tuple(b) for b in data.get("boundaries", [])], fees
+        versions = {int(k): tuple(v) for k, v in data.get("versions", {}).items()}
+        return data.get("chain"), [tuple(b) for b in data.get("boundaries", [])], fees, versions
     except (OSError, ValueError):
-        return None, [], {}
+        return None, [], {}, {}
 
 
-def save_cache(chain, boundaries, fees):
+def save_cache(chain, boundaries, fees, versions):
     tmp = CACHE + ".tmp"
     with open(tmp, "w") as f:
-        json.dump({"chain": chain, "boundaries": boundaries, "fees": fees}, f)
+        json.dump({"chain": chain, "boundaries": boundaries, "fees": fees,
+                   "versions": versions}, f)
     os.replace(tmp, CACHE)
 
 
@@ -147,15 +163,39 @@ def sync_fees(fees, tip_height):
     return fetched
 
 
+def sync_versions(versions, tip_height):
+    """Fill height->(time, version) for the last 2,016 blocks, newest first so
+    the short signalling windows are meaningful within one poll cycle.
+    Two RPC calls per block, <=200 blocks per cycle."""
+    floor = tip_height - EPOCH_BLOCKS + 1
+    for h in list(versions):
+        if h < floor or h > tip_height:
+            del versions[h]
+    fetched = 0
+    for h in range(tip_height, max(0, floor) - 1, -1):
+        if h in versions:
+            continue
+        try:
+            hdr = rpc("getblockheader", [rpc("getblockhash", [h])])
+        except RpcError:
+            break
+        versions[h] = (hdr["time"], hdr["version"])
+        fetched += 1
+        if fetched >= 200:
+            break
+    return fetched
+
+
 def sync_loop():
-    chain, boundaries, fees = load_cache()
+    chain, boundaries, fees, versions = load_cache()
     with LOCK:
-        STATE.update(chain=chain, boundaries=boundaries, fees=dict(fees))
+        STATE.update(chain=chain, boundaries=boundaries, fees=dict(fees),
+                     versions=dict(versions))
     while True:
         try:
             ci = rpc("getblockchaininfo")
             if ci["chain"] != chain:
-                chain, boundaries, fees = ci["chain"], [], {}
+                chain, boundaries, fees, versions = ci["chain"], [], {}, {}
             tip_height = ci["blocks"]
             want = tip_height // EPOCH_BLOCKS + 1  # boundaries 0..want-1
             while len(boundaries) < want:
@@ -163,20 +203,23 @@ def sync_loop():
                 hdr = rpc("getblockheader", [rpc("getblockhash", [h])])
                 boundaries.append((h, hdr["time"], hdr["difficulty"]))
                 if len(boundaries) % 100 == 0 or len(boundaries) == want:
-                    save_cache(chain, boundaries, fees)
+                    save_cache(chain, boundaries, fees, versions)
                 with LOCK:
                     STATE.update(chain=chain, boundaries=list(boundaries),
                                  backfill=(len(boundaries), want))
             tip_hdr = rpc("getblockheader", [ci["bestblockhash"]])
-            if sync_fees(fees, tip_height):
-                save_cache(chain, boundaries, fees)
+            changed = sync_fees(fees, tip_height)
+            changed += sync_versions(versions, tip_height)
+            if changed:
+                save_cache(chain, boundaries, fees, versions)
             with LOCK:
                 STATE.update(chain=chain, boundaries=list(boundaries),
                              tip=(tip_height, tip_hdr["time"]),
                              updated=time.time(), error=None,
                              ibd=ci.get("initialblockdownload", False),
                              verification=ci.get("verificationprogress", 1.0),
-                             backfill=None, fees=dict(fees))
+                             backfill=None, fees=dict(fees),
+                             versions=dict(versions))
         except (RpcError, KeyError, ValueError) as e:
             with LOCK:
                 STATE["error"] = str(e)
@@ -214,11 +257,17 @@ def demo_state():
     reward_sats = subsidy_btc(tip_height) * 1e8
     fees = {h: int(reward_sats * (0.03 + 0.01 * math.sin(h / 37.0)))
             for h in range((n - 1) * EPOCH_BLOCKS, tip_height + 1)}
+    # synthetic BIP-110 signalling: ~9% of the last 2,016 blocks, clustered
+    versions = {}
+    for i, h in enumerate(range(tip_height - EPOCH_BLOCKS + 1, tip_height + 1)):
+        sig = (h * 2654435761) % 100 < 9
+        versions[h] = (now - 300 - (tip_height - h) * 580,
+                       0x20000000 | (1 << SIGNAL_BIT if sig else 0))
     return {
         "chain": "main", "boundaries": boundaries,
         "tip": (tip_height, now - 300), "updated": time.time(),
         "error": None, "ibd": False, "verification": 1.0, "backfill": None,
-        "fees": fees, "demo": True,
+        "fees": fees, "versions": versions, "demo": True,
     }
 
 
@@ -325,6 +374,33 @@ def build_summary(state, rows):
         s["max_up"] = {"epoch": up["epoch"], "change": up["change"]}
         s["max_down"] = {"epoch": down["epoch"], "change": down["change"]}
     return s
+
+
+def build_signalling(state):
+    """BIP-110 view: bit-4 counts over short windows + the official
+    current-retarget-period tally, plus per-block data for the strip chart."""
+    out = {"bit": SIGNAL_BIT, "threshold_blocks": SIGNAL_THRESHOLD,
+           "period_blocks": EPOCH_BLOCKS, "ready": False}
+    tip = state["tip"]
+    versions = state.get("versions", {})
+    if not tip or not versions:
+        return out
+    tip_h = tip[0]
+    windows = {}
+    for w in SIGNAL_WINDOWS:
+        have = [versions[h] for h in range(tip_h - w + 1, tip_h + 1) if h in versions]
+        windows[str(w)] = {"have": len(have),
+                           "signalling": sum(1 for v in have if signals(v[1]))}
+    epoch_start = tip_h // EPOCH_BLOCKS * EPOCH_BLOCKS
+    ehave = [versions[h] for h in range(epoch_start, tip_h + 1) if h in versions]
+    blocks = [{"height": h, "time": versions[h][0], "signal": bool(signals(versions[h][1]))}
+              for h in sorted(versions) if h > tip_h - 288]
+    out.update(ready=True, tip_height=tip_h, windows=windows, blocks=blocks,
+               epoch={"start": epoch_start, "elapsed": tip_h - epoch_start + 1,
+                      "have": len(ehave),
+                      "signalling": sum(1 for v in ehave if signals(v[1]))},
+               backfilled=len(versions))
+    return out
 
 
 def fmt_compact(x, digits=1):
@@ -449,6 +525,10 @@ Bitcoin node; timestamps are unix seconds UTC. From another machine, use the app
 epoch since genesis: <code>epoch</code>, <code>start_height</code>, <code>start_time</code>, <code>end_time</code>,
 <code>difficulty</code>, <code>change</code> (fraction vs previous), <code>blocks</code>, <code>avg_interval</code> s,
 <code>hashrate</code> H/s, <code>hashvalue</code> sats/PH&middot;day, <code>current</code>. The last row is in progress.</td></tr>
+<tr><td><code>GET <a href="api/signalling">/api/signalling</a></code></td><td>BIP-110 (version bit 4) signalling:
+per-window counts (<code>windows</code>, last 18/36/72/144/288 blocks), the official current-retarget-period tally
+(<code>epoch</code>, threshold 1,109 of 2,016), and per-block <code>blocks</code> for the last 288
+(<code>height</code>, <code>time</code>, <code>signal</code>).</td></tr>
 <tr><td><code>GET <a href="export.csv">/export.csv</a></code></td><td>Epoch table as CSV (full history, formatted timestamps).</td></tr>
 <tr><td><code>GET <a href="export.json">/export.json</a></code></td><td>Same rows as the CSV, as a JSON array.</td></tr>
 <tr><td><code>GET <a href="widgets/status">/widgets/status</a></code></td><td>umbrelOS three-stats widget payload.</td></tr>
@@ -472,11 +552,9 @@ BRAIINS_SYMBOL = (
     "</svg>"
 )
 
-PAGE = """<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bitcoin Data</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'><rect width='1024' height='1024' rx='230' fill='%236B50FF'/><path d='M232 704 L392 512 L392 608 L552 384 L552 480 L712 288 L792 288' stroke='%23fff' stroke-width='56' fill='none' stroke-linecap='square'/></svg>">
-<style>
+FAVICON = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'><rect width='1024' height='1024' rx='230' fill='%236B50FF'/><path d='M232 704 L392 512 L392 608 L552 384 L552 480 L712 288 L792 288' stroke='%23fff' stroke-width='56' fill='none' stroke-linecap='square'/></svg>"
+
+CSS = """<style>
 /* Braiins CDS v11 (IBM Carbon v11) — token values from the design system
    mirror (colors_and_type.css), matching the conventions established in
    braiins-manager-agent/webui.py: violet-60 primary action + focus, blue link
@@ -720,11 +798,21 @@ tbody td .dirdot { display: inline-block; margin-right: 6px; }
   margin: var(--spacing-03) 0 0; }
 footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
   letter-spacing: .32px; color: var(--text-helper); text-align: center; }
-</style></head><body>
+
+/* signalling strip: one mark per block, colored when the bit is set */
+.strip rect.on { fill: var(--data-pos); }
+.strip rect.off { fill: var(--chart-axis); }
+</style>"""
+
+PAGE = """<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitcoin Data</title>
+<link rel="icon" href="__FAVICON__">
+__CSS__</head><body>
 <header class="shell">
   <div class="mark">__SYMBOL__</div>
   <span class="name">Bitcoin Data<small>on Umbrel</small></span>
-  <nav><a class="active" href="./">Difficulty</a><a href="api">API</a></nav>
+  <nav><a class="active" href="./">Difficulty</a><a href="signalling">Signalling</a><a href="api">API</a></nav>
 </header>
 <main>
   <div class="titlerow">
@@ -804,7 +892,11 @@ footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
       </table></div>
     </div>
     <p class="note" id="streaks"></p>
-    <p class="note" id="ath"></p>
+    <div class="tablewrap" style="margin-top: var(--spacing-05)"><table id="drawdowns">
+      <thead><tr><th>Longest without a new ATH</th><th>From</th><th>Until</th><th>Max drawdown</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p class="note">Stretches where difficulty stayed below its previous all-time high; drawdown is the deepest dip within the stretch.</p>
   </div>
   </section>
 
@@ -1058,25 +1150,37 @@ function renderRecords() {
     "Current streak: " + cur + " consecutive " + (prevSign >= 0 ? "increases" : "decreases") +
     ". Record: " + best + " consecutive increases, ending " + fmtDate(bestEnd.start_time) +
     ". The in-progress epoch counts — its adjustment was fixed at the last retarget.";
-  // longest stretch without a new all-time-high difficulty
-  let ath = -Infinity, lastAth = null, rec = 0, recFrom = null, recTo = null;
+  // top-5 stretches without a new all-time-high difficulty
+  let ath = -Infinity, from = null, low = Infinity;
+  const gaps = [];
   for (const r of S.rows) {
     if (r.difficulty > ath) {
-      ath = r.difficulty;
-      if (lastAth != null && r.start_time - lastAth > rec) {
-        rec = r.start_time - lastAth; recFrom = lastAth; recTo = r.start_time;
-      }
-      lastAth = r.start_time;
-    }
+      if (from != null)
+        gaps.push({ from, to: r.start_time, depth: low / ath - 1, ongoing: false });
+      ath = r.difficulty; from = r.start_time; low = ath;
+    } else low = Math.min(low, r.difficulty);
   }
-  const curGap = tipTime() - lastAth;
-  const days = t => Math.round(t / 86400) + " days";
-  document.getElementById("ath").textContent = curGap > rec
-    ? "Longest wait for a new difficulty ATH: " + days(curGap) +
-      " — ongoing since " + fmtDate(lastAth) + ", an all-time record."
-    : "Longest wait for a new difficulty ATH: " + days(rec) +
-      " (" + fmtDate(recFrom) + " → " + fmtDate(recTo) + "). Currently " +
-      days(curGap) + " since the last ATH.";
+  gaps.push({ from, to: tipTime(), depth: low / ath - 1, ongoing: true });
+  gaps.sort((a, b) => (b.to - b.from) - (a.to - a.from));
+  const dtb = document.querySelector("#drawdowns tbody");
+  dtb.textContent = "";
+  for (const g of gaps.slice(0, 5)) {
+    const tr = document.createElement("tr");
+    const dur = document.createElement("td");
+    dur.style.textAlign = "left";
+    dur.textContent = Math.round((g.to - g.from) / 86400) + " days" + (g.ongoing ? " · ongoing" : "");
+    const f = document.createElement("td"); f.textContent = fmtDate(g.from);
+    const t = document.createElement("td"); t.textContent = g.ongoing ? "—" : fmtDate(g.to);
+    const d = document.createElement("td");
+    if (g.depth < 0) {
+      const dot = document.createElement("span");
+      dot.className = "dirdot down";
+      d.appendChild(dot);
+    }
+    d.appendChild(document.createTextNode(fmtPct(Math.min(0, g.depth), 1)));
+    tr.append(dur, f, t, d);
+    dtb.appendChild(tr);
+  }
 }
 
 // -- growth: CAGR over trailing windows + doubling time -------------------------
@@ -1624,6 +1728,183 @@ setInterval(fetchAll, 60000);
 </script>
 </body></html>"""
 
+SIGNAL_PAGE = """<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitcoin Data — Signalling</title>
+<link rel="icon" href="__FAVICON__">
+__CSS__</head><body>
+<header class="shell">
+  <div class="mark">__SYMBOL__</div>
+  <span class="name">Bitcoin Data<small>on Umbrel</small></span>
+  <nav><a href="./">Difficulty</a><a class="active" href="signalling">Signalling</a><a href="api">API</a></nav>
+</header>
+<main>
+  <div class="titlerow">
+    <h2>BIP-110 signalling</h2>
+    <span id="pill"><span class="dot"></span><span id="pill-text">Connecting&hellip;</span></span>
+  </div>
+
+  <div class="tiles" id="win-tiles">
+    <div class="tile"><div class="label">Current retarget period</div>
+      <div class="value" id="t-epoch">—</div>
+      <div class="meter"><i id="t-epoch-bar" style="width:0%"></i></div>
+      <div class="sub" id="t-epoch-sub"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="cardhead"><h3>Signalling blocks — last 288</h3>
+      <span class="key"><span><i class="pos"></i>Signalling bit 4</span></span></div>
+    <svg class="chart strip" id="strip" height="120" role="img" aria-label="Signalling blocks, last 288"></svg>
+    <p class="note" id="strip-note"></p>
+  </div>
+
+  <div class="card">
+    <div class="cardhead"><h3>Recent signalling blocks</h3></div>
+    <div class="tablewrap"><table id="sig-table">
+      <thead><tr><th>Height</th><th>Time (UTC)</th><th>Age</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p class="note" id="sig-note"></p>
+  </div>
+
+  <footer>BIP-110 lock-in requires 1,109 of 2,016 blocks (55%) in one retarget period &middot; version bit 4 &middot; data from your Bitcoin node</footer>
+</main>
+<script>
+"use strict";
+const WINDOWS = [18, 36, 72, 144, 288];
+function fmtInt(x) { return x == null ? "—" : x.toLocaleString("en-US"); }
+function fmtDateTime(ts) {
+  return ts == null ? "—" : new Date(ts * 1000).toISOString().slice(0, 16).replace("T", " ");
+}
+function ago(ts) {
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  if (s < 90) return Math.round(s) + " s ago";
+  if (s < 5400) return Math.round(s / 60) + " min ago";
+  return Math.round(s / 3600) + " h ago";
+}
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+const NS = "http://www.w3.org/2000/svg";
+
+function renderPill(summary) {
+  const pill = document.getElementById("pill"), txt = document.getElementById("pill-text");
+  const s = summary || {};
+  pill.className = s.status === "waiting" ? "" : (s.status || "");
+  if (s.status === "ok") {
+    txt.textContent = "Live · block " + fmtInt(s.tip_height) +
+      (s.updated ? " · updated " + ago(s.updated) : "");
+  } else txt.textContent = s.message || "Connecting…";
+}
+
+function render(d, summary) {
+  renderPill(summary);
+  if (!d.ready) return;
+  // current-period tile: the number that decides lock-in
+  const e = d.epoch;
+  document.getElementById("t-epoch").textContent =
+    fmtInt(e.signalling) + " / " + fmtInt(d.threshold_blocks);
+  document.getElementById("t-epoch-bar").style.width =
+    Math.min(100, 100 * e.signalling / d.threshold_blocks) + "%";
+  document.getElementById("t-epoch-sub").textContent =
+    e.elapsed + " blocks elapsed · " +
+    (e.have ? (100 * e.signalling / e.have).toFixed(1) : "0") +
+    "% of observed blocks signal";
+  // one tile per short window
+  const tiles = document.getElementById("win-tiles");
+  while (tiles.children.length > 1) tiles.removeChild(tiles.lastChild);
+  for (const w of WINDOWS) {
+    const win = d.windows[String(w)];
+    const tile = document.createElement("div"); tile.className = "tile";
+    const label = document.createElement("div"); label.className = "label";
+    label.textContent = "Last " + w + " blocks";
+    const value = document.createElement("div"); value.className = "value";
+    value.textContent = String(win.signalling);
+    const sub = document.createElement("div"); sub.className = "sub";
+    sub.textContent = win.have < w
+      ? "reading headers… " + win.have + "/" + w
+      : (100 * win.signalling / w).toFixed(1) + "% of window";
+    tile.append(label, value, sub);
+    tiles.appendChild(tile);
+  }
+  drawStrip(d);
+  // table of recent signalling blocks, newest first
+  const tb = document.querySelector("#sig-table tbody");
+  tb.textContent = "";
+  const sig = d.blocks.filter(b => b.signal).reverse();
+  for (const b of sig.slice(0, 25)) {
+    const tr = document.createElement("tr");
+    const h = document.createElement("td"); h.style.textAlign = "left";
+    h.textContent = fmtInt(b.height);
+    const t = document.createElement("td"); t.textContent = fmtDateTime(b.time);
+    const a = document.createElement("td"); a.textContent = ago(b.time);
+    tr.append(h, t, a);
+    tb.appendChild(tr);
+  }
+  document.getElementById("sig-note").textContent = sig.length
+    ? sig.length + " signalling blocks in the last 288" + (sig.length > 25 ? " (showing 25 newest)" : "")
+    : "No signalling blocks in the last 288.";
+}
+
+function drawStrip(d) {
+  const svg = document.getElementById("strip"), card = svg.parentNode;
+  svg.textContent = "";
+  const blocks = d.blocks;
+  if (!blocks.length) return;
+  const W = card.clientWidth - 32, H = 120, m = { t: 10, r: 8, b: 26, l: 8 };
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const n = 288, first = d.tip_height - n + 1;
+  const slot = pw / n, bw = Math.max(1, slot - 1);
+  for (const b of blocks) {
+    const x = m.l + slot * (b.height - first);
+    const r = document.createElementNS(NS, "rect");
+    r.setAttribute("x", x); r.setAttribute("width", bw);
+    // non-signalling blocks stay as short baseline ticks so density reads at a glance
+    r.setAttribute("y", b.signal ? m.t : m.t + ph - 10);
+    r.setAttribute("height", b.signal ? ph : 10);
+    r.setAttribute("class", b.signal ? "on" : "off");
+    const title = document.createElementNS(NS, "title");
+    title.textContent = "Block " + fmtInt(b.height) + " · " + fmtDateTime(b.time) + " UTC" +
+      (b.signal ? " · signalling" : "");
+    r.appendChild(title);
+    svg.appendChild(r);
+  }
+  // height axis: a few ticks
+  for (let i = 0; i <= 4; i++) {
+    const h = first + Math.round(n * i / 4);
+    const t = document.createElementNS(NS, "text");
+    t.setAttribute("x", m.l + slot * (h - first));
+    t.setAttribute("y", H - 8);
+    t.setAttribute("text-anchor", i === 0 ? "start" : i === 4 ? "end" : "middle");
+    t.textContent = fmtInt(Math.min(h, d.tip_height));
+    svg.appendChild(t);
+  }
+  document.getElementById("strip-note").textContent =
+    "Backfilled " + fmtInt(d.backfilled) + " of " + fmtInt(d.period_blocks) +
+    " block headers. Hover a mark for details.";
+}
+
+async function fetchAll() {
+  try {
+    const [dr, sr] = await Promise.all([
+      fetch("api/signalling", { cache: "no-store" }),
+      fetch("api/summary", { cache: "no-store" })]);
+    render(await dr.json(), await sr.json());
+  } catch (e) {
+    renderPill({ status: "error", message: "UI unreachable" });
+  }
+}
+let rsz;
+window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(fetchAll, 150); });
+fetchAll();
+setInterval(fetchAll, 30000);
+</script>
+</body></html>"""
+
+PAGE = PAGE.replace("__CSS__", CSS).replace("__FAVICON__", FAVICON)
+SIGNAL_PAGE = SIGNAL_PAGE.replace("__CSS__", CSS).replace("__FAVICON__", FAVICON)
+
 
 class Handler(BaseHTTPRequestHandler):
     def _send(self, body, ctype, cache="no-store"):
@@ -1655,6 +1936,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path.rstrip("/").endswith("/api"):
             self._send(API_PAGE.encode(), "text/html; charset=utf-8")
+            return
+        if path.endswith("/api/signalling"):
+            self._send(json.dumps(build_signalling(state)).encode(), "application/json")
+            return
+        if path.rstrip("/").endswith("/signalling"):
+            page = SIGNAL_PAGE.replace("__SYMBOL__", BRAIINS_SYMBOL)
+            self._send(page.encode(), "text/html; charset=utf-8")
             return
         if path.endswith("/api/epochs"):
             rows = build_rows(state)
