@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.9.0] - 2026-08-03
+
+Adjustment distribution is now an overlaid density curve (per halving era or year), far clearer than the old bars, and the Range filter scopes it with axes that recompute to the selected window. The Range control is now sticky so it stays reachable across all the charts.
+
 ## [1.8.0] - 2026-08-03
 
 Difficulty chart gains a Difficulty Ribbon toggle (moving-average fan; compression flags miner capitulation). New 'Cumulative change by year' chart overlays each year's YTD difficulty change. New 'Adjustment distribution' histogram with All / by-halving-era / by-year grouping. Faster loads: the epoch history is cached locally and painted instantly, then refreshed.
