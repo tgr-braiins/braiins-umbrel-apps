@@ -727,7 +727,12 @@ td.copyable:hover { text-decoration: underline dotted var(--border-strong); }
   transition: width var(--duration-fast-02) var(--ease-productive); }
 
 /* Filter row: one row, above everything it scopes */
-.filters { display: flex; align-items: center; gap: var(--spacing-05); margin-bottom: var(--spacing-05); }
+/* Range row sticks below the section nav so it stays reachable across the
+   several charts it scopes (difficulty, adjustment, distribution). */
+.filters { display: flex; align-items: center; gap: var(--spacing-05);
+  position: sticky; top: 44px; z-index: 4; background: var(--background);
+  padding: var(--spacing-03) 0; margin-bottom: var(--spacing-05);
+  border-bottom: 1px solid var(--border-subtle); }
 .filters .flabel { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
 .switcher { display: inline-flex; background: var(--layer-01); padding: 0; }
 .switcher button { appearance: none; border: 0; border-radius: 0; cursor: pointer;
@@ -980,7 +985,7 @@ __CSS__</head><body>
   </div>
 
   <div class="card">
-    <div class="cardhead"><h3><span class="info" title="How often difficulty adjustments of a given size have occurred. Bars are counts per size bucket; the grouping colours each bar by halving era or by year so you can see how the distribution shifted over time.">Adjustment distribution</span></h3>
+    <div class="cardhead"><h3><span class="info" title="Distribution of difficulty adjustment sizes as a density curve (each line's area sums to 100% of its group). Group by halving era or year to compare shapes; the Range filter above scopes which epochs are included.">Adjustment distribution</span></h3>
       <span class="switcher" id="histgroup" role="group" aria-label="Histogram grouping">
         <button data-g="all" aria-pressed="true">All</button>
         <button data-g="era" aria-pressed="false">By halving era</button>
@@ -1822,67 +1827,76 @@ function drawCumYTD() {
 // -- adjustment distribution histogram, optionally grouped ----------------------
 function drawHist() {
   const svg = document.getElementById("chart-hist"), card = svg.parentNode;
-  const legend = document.getElementById("hist-legend"), tt = document.getElementById("tt-hist");
+  const legend = document.getElementById("hist-legend");
   svg.textContent = ""; legend.textContent = "";
-  const changed = S.rows.filter(r => r.change != null);
-  if (!changed.length) return;
-  const BIN = 0.01;   // 1-percentage-point buckets
+  // respect the Range filter, and recompute the x-axis from the filtered data
+  const changed = filteredRows().filter(r => r.change != null);
+  if (changed.length < 2) return;
   let lo = Infinity, hi = -Infinity;
   for (const r of changed) { lo = Math.min(lo, r.change); hi = Math.max(hi, r.change); }
-  const b0 = Math.floor(lo / BIN), b1 = Math.ceil(hi / BIN);
-  const nbins = b1 - b0;
-  // group key + ordered group list
+  // nice bin width ≈ range/45 so the curve is smooth at any zoom
+  const raw = Math.max((hi - lo) / 45, 1e-4);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const BIN = ([1, 2, 2.5, 5, 10].map(s => s * mag).find(s => s >= raw)) || mag;
+  const b0 = Math.floor(lo / BIN), b1 = Math.ceil(hi / BIN) + 1, nbins = Math.max(2, b1 - b0);
   const groupOf = r => {
     if (S.histgroup === "year") return String(new Date(r.start_time * 1000).getUTCFullYear());
     if (S.histgroup === "era") {
-      const era = Math.floor(r.start_height / 210000);   // halving era index
-      const subs = 50 / Math.pow(2, era);
-      return subs >= 1 ? subs + " BTC era" : (subs * 1e8) + " sat era";
+      const subs = 50 / Math.pow(2, Math.floor(r.start_height / 210000));
+      return (subs >= 1 ? subs : +(subs).toFixed(4)) + " BTC era";
     }
     return "All";
   };
-  const groups = [];
-  const bins = {};   // group -> Int array over bins
+  const groups = [], bins = {};
   for (const r of changed) {
     const g = groupOf(r);
     if (!(g in bins)) { bins[g] = new Array(nbins).fill(0); groups.push(g); }
-    bins[g][Math.floor(r.change / BIN) - b0] += 1;
+    bins[g][Math.min(nbins - 1, Math.floor(r.change / BIN) - b0)] += 1;
   }
   groups.sort();
-  const totals = new Array(nbins).fill(0);
-  for (const g of groups) for (let i = 0; i < nbins; i++) totals[i] += bins[g][i];
-  const maxCount = Math.max(1, ...totals);
-  const W = card.clientWidth - 32, H = 280, m = { t: 16, r: 16, b: 30, l: 40 };
+  // normalise each group to a density (share of its own adjustments per bin) so
+  // eras/years with very different counts compare on shape
+  let maxD = 0;
+  const dens = {};
+  for (const g of groups) {
+    const total = bins[g].reduce((a, b) => a + b, 0) || 1;
+    dens[g] = bins[g].map(c => c / total);
+    maxD = Math.max(maxD, ...dens[g]);
+  }
+  const W = card.clientWidth - 32, H = 280, m = { t: 16, r: 16, b: 30, l: 44 };
   svg.setAttribute("width", W); svg.setAttribute("height", H);
   const pw = W - m.l - m.r, ph = H - m.t - m.b;
-  const x = b => m.l + pw * b / nbins, bw = pw / nbins;
-  const y = c => m.t + ph * (1 - c / (maxCount * 1.05));
-  for (const v of niceTicks(0, maxCount * 1.05, 4)) {
+  const xc = i => m.l + pw * (i + 0.5) / nbins;                 // bin-centre x
+  const y = d => m.t + ph * (1 - d / (maxD * 1.08 || 1));
+  for (const v of niceTicks(0, maxD * 1.08, 4)) {
     el("line", { class: "grid", x1: m.l, x2: m.l + pw, y1: y(v), y2: y(v) }, svg);
-    el("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg).textContent = String(Math.round(v));
+    el("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg).textContent = (v * 100).toFixed(0) + "%";
   }
-  // x ticks at each whole 5% and at 0
-  for (let b = b0; b <= b1; b++) {
-    const pct = b * BIN;
-    if (Math.abs(pct * 100) % 5 < 0.5) {
-      const px = x(b - b0);
-      el("line", { class: b === 0 ? "zero" : "grid", x1: px, x2: px, y1: m.t, y2: m.t + ph }, svg);
+  // x ticks: a handful across the range, always including 0
+  const step = Math.max(1, Math.round(nbins / 8));
+  for (let i = 0; i <= nbins; i++) {
+    const pct = (b0 + i) * BIN;
+    const atZero = Math.abs(pct) < BIN / 2;
+    if (i % step === 0 || atZero) {
+      const px = m.l + pw * i / nbins;
+      el("line", { class: atZero ? "zero" : "grid", x1: px, x2: px, y1: m.t, y2: m.t + ph }, svg);
       el("text", { x: px, y: H - 8, "text-anchor": "middle" }, svg).textContent = fmtPct(pct, 0);
     }
   }
   const single = S.histgroup === "all";
   groups.forEach((g, gi) => {
     const col = single ? cssVar("--data-pos") : cssVar(CAT_COL[gi % CAT_COL.length]);
-    for (let i = 0; i < nbins; i++) {
-      const c = bins[g][i]; if (!c) continue;
-      let below = 0; for (let k = 0; k < gi; k++) below += bins[groups[k]][i];
-      const yTop = y(below + c), yBot = y(below);
-      el("rect", { x: x(i) + 0.5, width: Math.max(0.5, bw - 1), y: yTop, height: Math.max(0, yBot - yTop),
-        fill: col }, svg);
+    // frequency polygon (density line) through bin centres
+    let p = "";
+    for (let i = 0; i < nbins; i++) p += (p ? "L" : "M") + xc(i) + " " + y(dens[g][i]);
+    if (single) {   // fill under the single "All" curve
+      el("path", { d: p + "L" + xc(nbins - 1) + " " + y(0) + "L" + xc(0) + " " + y(0) + "Z",
+        fill: col, opacity: 0.12 }, svg);
     }
+    el("path", { d: p, fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
     if (!single) {
       const sp = document.createElement("span");
-      const sw = document.createElement("i"); sw.style.background = col; sw.style.height = "10px";
+      const sw = document.createElement("i"); sw.style.background = col;
       sp.append(sw, document.createTextNode(g));
       legend.appendChild(sp);
     }
@@ -2048,7 +2062,7 @@ document.getElementById("range").addEventListener("click", ev => {
   S.range = b.dataset.r; S.page = 0;
   for (const x of ev.currentTarget.querySelectorAll("button"))
     x.setAttribute("aria-pressed", String(x === b));
-  drawDiff(); drawAdj(); renderTable();
+  drawDiff(); drawAdj(); drawHist(); renderTable();
 });
 document.getElementById("scale").addEventListener("click", ev => {
   const b = ev.target.closest("button"); if (!b) return;
