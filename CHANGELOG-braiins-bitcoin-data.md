@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.10.0] - 2026-08-03
+
+The Scope selector now lets you filter every chart by halving era (50 BTC … 3.125 BTC) as well as by time window, and the Cumulative-change-by-year chart now responds to the selection.
+
 ## [1.9.0] - 2026-08-03
 
 Adjustment distribution is now an overlaid density curve (per halving era or year), far clearer than the old bars, and the Range filter scopes it with axes that recompute to the selected window. The Range control is now sticky so it stays reachable across all the charts.
