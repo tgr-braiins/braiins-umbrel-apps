@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.8.0] - 2026-08-03
+
+Difficulty chart gains a Difficulty Ribbon toggle (moving-average fan; compression flags miner capitulation). New 'Cumulative change by year' chart overlays each year's YTD difficulty change. New 'Adjustment distribution' histogram with All / by-halving-era / by-year grouping. Faster loads: the epoch history is cached locally and painted instantly, then refreshed.
+
 ## [1.7.0] - 2026-08-03
 
 Metric definitions: hover any dotted-underlined label for a plain-language explanation (difficulty, projected adjustment, hashrate, hashvalue, halving, CAGR, drawdowns and more). New callout at the top of Overview when the current difficulty pattern ranks in a top-5 record — the latest adjustment, an ongoing consecutive run, or an ongoing stretch below the all-time high.
