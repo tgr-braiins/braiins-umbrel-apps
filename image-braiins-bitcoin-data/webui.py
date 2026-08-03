@@ -617,6 +617,10 @@ CSS = """<style>
   --chart-grid: var(--gray-20);
   --chart-axis: var(--gray-50);
   --meter-track: var(--blue-20);
+  /* categorical series palette (year/era lines) — deeper tones for the light
+     theme; overridden brighter for dark below. Raw hex so var() always resolves. */
+  --cat-1: #0f62fe; --cat-2: #ba4e00; --cat-3: #007d79; --cat-4: #6929c4;
+  --cat-5: #198038; --cat-6: #da1e28; --cat-7: #8a3ffc; --cat-8: #002d9c; --cat-9: #525252;
 }
 @media (prefers-color-scheme: dark) {
   :root { /* Gray 90 theme */
@@ -640,6 +644,9 @@ CSS = """<style>
     --chart-grid: var(--gray-80);
     --chart-axis: var(--gray-50);
     --meter-track: var(--blue-80);
+    /* brighter categorical series for the dark theme */
+    --cat-1: #78a9ff; --cat-2: #ff832b; --cat-3: #08bdba; --cat-4: #be95ff;
+    --cat-5: #42be65; --cat-6: #ff8389; --cat-7: #a56eff; --cat-8: #4589ff; --cat-9: #f1c21b;
   }
 }
 * { box-sizing: border-box; }
@@ -983,6 +990,7 @@ __CSS__</head><body>
     <svg class="chart" id="chart-ytd" height="300" role="img" aria-label="Cumulative difficulty change since Jan 1, by year"></svg>
     <div class="chartlegend" id="ytd-legend"></div>
     <div class="tooltip" id="tt-ytd"></div>
+    <p class="note">Each line is one <b>calendar year</b>'s difficulty change compounded from Jan 1 (0%) to Dec 31 — overlaid so you can compare years. The current year stops at today (YTD). The Scope selector picks which years are shown; a time window (e.g. 1y) includes every year it touches, drawn in full.</p>
   </div>
 
   <div class="card">
@@ -1035,20 +1043,11 @@ __CSS__</head><body>
 "use strict";
 const S = { rows: [], summary: null, range: "all", scale: "linear", ribbon: false,
             sort: { key: "epoch", dir: -1 }, page: 0, basis: 365, histgroup: "all" };
-// categorical palette for year / era series. Theme-aware: brighter tones on the
-// dark theme, deeper tones on the light theme, so no line blends into the
-// background. Same hue order in both so a series keeps a consistent identity.
-const CAT_DARK = ["--blue-40", "--orange-40", "--teal-50", "--purple-40",
-                  "--green-40", "--red-40", "--yellow-30", "--blue-50", "--purple-50"];
-const CAT_LIGHT = ["--blue-60", "--orange-60", "--teal-60", "--purple-70",
-                   "--green-60", "--red-60", "--gray-70", "--blue-80", "--purple-60"];
-function isDarkTheme() {
-  return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-}
-function catCol(i) {
-  const a = isDarkTheme() ? CAT_DARK : CAT_LIGHT;
-  return cssVar(a[((i % a.length) + a.length) % a.length]);
-}
+// categorical colour for year/era series. Uses the --cat-1..9 CSS tokens, which
+// the stylesheet already switches per theme — so var() always resolves to a
+// legible colour (the earlier palettes referenced tokens this app never defined,
+// which is why some lines were invisible).
+function catCol(i) { return cssVar("--cat-" + ((((i % 9) + 9) % 9) + 1)); }
 // Difficulty-ribbon moving-average windows, in epochs (~2 weeks each): ~2 months
 // to ~2.3 years. Light→dark = fast→slow.
 const RIBBON_WIN = [2, 4, 7, 11, 17, 26, 40, 60];
