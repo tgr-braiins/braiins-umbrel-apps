@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.5.0] - 2026-08-03
+
+Records now include the longest and biggest consecutive difficulty increases and the longest and deepest consecutive decreases. Monthly change adds 3-year and 5-year averages over completed months. New 2y and 3y chart ranges. Headline stat tiles reformatted so hashrate and the next-adjustment label no longer wrap.
+
 ## [1.4.0] - 2026-07-30
 
 New Signalling page tracking BIP-110 (version bit 4): counts over the last 18/36/72/144/288 blocks, current retarget period vs the 1,109-block lock-in threshold, a strip chart of the last 288 blocks, and recent signalling blocks. Records now includes the five longest stretches without a new difficulty ATH, with max drawdown.
