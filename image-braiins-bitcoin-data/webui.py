@@ -790,11 +790,16 @@ tbody td .dirdot { display: inline-block; margin-right: 6px; }
 
 /* records: two ranked lists side by side */
 .recgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--spacing-06); }
+/* run-record tables: 2×2 so the date range column isn't clipped */
+.rungrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: var(--spacing-06); }
 
 /* calendar: year rows x month columns, diverging tint behind text-token values */
 .cal td, .cal th { height: 36px; padding: 0 var(--spacing-04); }
 .cal td { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; }
 .cal td.empty { color: var(--text-helper); background: var(--table-row); }
+/* seasonal average rows sit above the per-year grid, set off by a divider */
+.cal tr.seasonavg td { background: var(--layer-hover); }
+.cal tr.seasonavg + tr:not(.seasonavg) td { border-top: 2px solid var(--border-strong); }
 .note { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-helper);
   margin: var(--spacing-03) 0 0; }
 footer { margin-top: var(--spacing-07); font: 400 12px/1.3333 var(--font-sans);
@@ -874,7 +879,6 @@ __CSS__</head><body>
   <div class="card">
     <div class="cardhead"><h3>Monthly change</h3>
       <span class="key"><span><i class="pos"></i>Increase</span><span><i class="neg"></i>Decrease</span></span></div>
-    <div class="statrow" id="month-avg"></div>
     <div class="tablewrap"><table id="months" class="cal">
       <thead><tr></tr></thead><tbody></tbody>
     </table></div>
@@ -894,11 +898,21 @@ __CSS__</head><body>
       </table></div>
     </div>
     <p class="note" id="streaks"></p>
-    <div class="tablewrap" style="margin-top: var(--spacing-05)"><table id="runs">
-      <thead><tr><th>Consecutive run</th><th>Epochs</th><th>Total change</th><th>Period</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <p class="note">Runs of consecutive up- or down-adjustments. Total change compounds every step in the run, so the longest run and the biggest/deepest run can be different.</p>
+    <div class="rungrid" style="margin-top: var(--spacing-05)">
+      <div class="tablewrap"><table id="run-linc">
+        <thead><tr><th>Longest increases</th><th>Total change</th><th>Period</th></tr></thead><tbody></tbody>
+      </table></div>
+      <div class="tablewrap"><table id="run-binc">
+        <thead><tr><th>Biggest increases</th><th>Epochs</th><th>Period</th></tr></thead><tbody></tbody>
+      </table></div>
+      <div class="tablewrap"><table id="run-ldec">
+        <thead><tr><th>Longest decreases</th><th>Total change</th><th>Period</th></tr></thead><tbody></tbody>
+      </table></div>
+      <div class="tablewrap"><table id="run-ddec">
+        <thead><tr><th>Deepest decreases</th><th>Epochs</th><th>Period</th></tr></thead><tbody></tbody>
+      </table></div>
+    </div>
+    <p class="note">Runs of consecutive up- or down-adjustments (top 5 each). Total change compounds every step, so the longest run and the biggest/deepest run can differ.</p>
     <div class="tablewrap" style="margin-top: var(--spacing-05)"><table id="drawdowns">
       <thead><tr><th>Longest without a new ATH</th><th>From</th><th>Until</th><th>Max drawdown</th></tr></thead>
       <tbody></tbody>
@@ -1182,28 +1196,40 @@ function renderRecords() {
     run.to = r.start_time;
   }
   const ups = runs.filter(r => r.sign > 0), downs = runs.filter(r => r.sign < 0);
-  const pick = (arr, keyfn) => arr.length ? arr.reduce((a, b) => keyfn(b) > keyfn(a) ? b : a) : null;
-  const recs = [
-    ["Longest increase", pick(ups, r => r.len)],
-    ["Biggest increase", pick(ups, r => r.cum)],
-    ["Longest decrease", pick(downs, r => r.len)],
-    ["Deepest decrease", pick(downs, r => -r.cum)],   // most negative cumulative
-  ];
-  const rtb = document.querySelector("#runs tbody");
-  rtb.textContent = "";
-  for (const [label, r] of recs) {
-    if (!r) continue;
-    const tr = document.createElement("tr");
-    const c0 = document.createElement("td"); c0.style.textAlign = "left"; c0.textContent = label;
-    const c1 = document.createElement("td"); c1.textContent = r.len + " epochs";
-    const c2 = document.createElement("td");
-    const dot = document.createElement("span");
-    dot.className = "dirdot " + (r.sign > 0 ? "up" : "down"); c2.appendChild(dot);
-    c2.appendChild(document.createTextNode(fmtPct(r.cum - 1, 1)));
-    const c3 = document.createElement("td"); c3.textContent = fmtDate(r.from) + " → " + fmtDate(r.to);
-    tr.append(c0, c1, c2, c3);
-    rtb.appendChild(tr);
-  }
+  // four top-5 tables. `primary` picks what the first column shows: the run
+  // length (for longest) or the compounded % (for biggest/deepest).
+  const fillRuns = (id, list, primary) => {
+    const tb = document.querySelector(id + " tbody");
+    tb.textContent = "";
+    for (const r of list) {
+      const tr = document.createElement("tr");
+      const c0 = document.createElement("td"); c0.style.textAlign = "left";
+      if (primary === "len") {
+        c0.textContent = r.len + " epochs";
+      } else {
+        const dot = document.createElement("span");
+        dot.className = "dirdot " + (r.sign > 0 ? "up" : "down"); c0.appendChild(dot);
+        c0.appendChild(document.createTextNode(fmtPct(r.cum - 1, 1)));
+      }
+      const c1 = document.createElement("td");
+      if (primary === "len") {
+        const dot = document.createElement("span");
+        dot.className = "dirdot " + (r.sign > 0 ? "up" : "down"); c1.appendChild(dot);
+        c1.appendChild(document.createTextNode(fmtPct(r.cum - 1, 1)));
+      } else {
+        c1.textContent = r.len;
+      }
+      const c2 = document.createElement("td");
+      c2.textContent = fmtDate(r.from) + " → " + fmtDate(r.to);
+      tr.append(c0, c1, c2);
+      tb.appendChild(tr);
+    }
+  };
+  const byLen = (a, b) => b.len - a.len, byCum = (a, b) => b.cum - a.cum;
+  fillRuns("#run-linc", ups.slice().sort(byLen).slice(0, 5), "len");
+  fillRuns("#run-binc", ups.slice().sort(byCum).slice(0, 5), "cum");
+  fillRuns("#run-ldec", downs.slice().sort(byLen).slice(0, 5), "len");
+  fillRuns("#run-ddec", downs.slice().sort((a, b) => a.cum - b.cum).slice(0, 5), "cum");
   // top-5 stretches without a new all-time-high difficulty
   let ath = -Infinity, from = null, low = Infinity;
   const gaps = [];
@@ -1355,6 +1381,34 @@ function renderCalendar() {
   for (const m of MONTHS) { const th = document.createElement("th"); th.textContent = m; mhead.appendChild(th); }
   const mbody = document.querySelector("#months tbody");
   mbody.textContent = "";
+
+  // seasonal averages: for each month, the mean of that month's change across
+  // the most recent 3 / 5 COMPLETED years (so Jan = Jan'26,'25,'24; and an
+  // incomplete current month like Aug'26 is skipped, falling back to Aug'25…).
+  const season = Array.from({ length: 12 }, () => []);   // season[m] = [change] year-desc
+  for (let y = y1; y >= y0; y--) {
+    for (let m = 0; m < 12; m++) {
+      const t0 = Date.UTC(y, m, 1) / 1000, t1 = Date.UTC(y, m + 1, 1) / 1000;
+      if (t1 > now || t0 < first) continue;
+      season[m].push(valAt(t1) / valAt(t0) - 1);
+    }
+  }
+  const avgRow = (label, n) => {
+    const tr = document.createElement("tr"); tr.className = "seasonavg";
+    const c0 = document.createElement("td"); c0.textContent = label;
+    c0.style.textAlign = "left"; c0.style.fontWeight = "700"; tr.appendChild(c0);
+    for (let m = 0; m < 12; m++) {
+      const vals = season[m].slice(0, n);
+      const td = document.createElement("td");
+      if (!vals.length) { td.className = "empty"; td.textContent = ""; }
+      else changeCell(td, vals.reduce((a, b) => a + b, 0) / vals.length, "");
+      tr.appendChild(td);
+    }
+    mbody.appendChild(tr);
+  };
+  avgRow("3Y avg", 3);
+  avgRow("5Y avg", 5);
+
   for (let y = y1; y >= y0; y--) {
     const tr = document.createElement("tr");
     const td0 = document.createElement("td"); td0.textContent = String(y);
@@ -1371,29 +1425,6 @@ function renderCalendar() {
       tr.appendChild(td);
     }
     mbody.appendChild(tr);
-  }
-
-  // 3Y / 5Y average monthly change — COMPLETED months only (excludes the
-  // current partial month, and any month starting before our data begins)
-  const monthly = [];
-  for (let y = y0; y <= y1; y++) {
-    for (let m = 0; m < 12; m++) {
-      const t0 = Date.UTC(y, m, 1) / 1000, t1 = Date.UTC(y, m + 1, 1) / 1000;
-      if (t1 > now || t0 < first) continue;
-      monthly.push(valAt(t1) / valAt(t0) - 1);
-    }
-  }
-  const avgBox = document.getElementById("month-avg");
-  avgBox.textContent = "";
-  const avgOf = n => { const a = monthly.slice(-n); return a.length ? a.reduce((x, v) => x + v, 0) / a.length : null; };
-  for (const [n, lbl] of [[36, "3Y"], [60, "5Y"]]) {
-    const a = avgOf(n);
-    if (a == null) continue;
-    const div = document.createElement("div");
-    const b = document.createElement("b"); b.textContent = fmtPct(a, 2) + "/mo";
-    div.appendChild(b);
-    div.appendChild(document.createTextNode(lbl + " avg (" + Math.min(n, monthly.length) + " completed months)"));
-    avgBox.appendChild(div);
   }
 }
 
