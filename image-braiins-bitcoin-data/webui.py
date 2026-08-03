@@ -1035,9 +1035,20 @@ __CSS__</head><body>
 "use strict";
 const S = { rows: [], summary: null, range: "all", scale: "linear", ribbon: false,
             sort: { key: "epoch", dir: -1 }, page: 0, basis: 365, histgroup: "all" };
-// categorical palette for year / era series (CVD-aware, distinct in both themes)
-const CAT_COL = ["--blue-60", "--orange-50", "--teal-60", "--purple-60",
-                 "--green-50", "--yellow-30", "--red-60", "--blue-40", "--violet-70"];
+// categorical palette for year / era series. Theme-aware: brighter tones on the
+// dark theme, deeper tones on the light theme, so no line blends into the
+// background. Same hue order in both so a series keeps a consistent identity.
+const CAT_DARK = ["--blue-40", "--orange-40", "--teal-50", "--purple-40",
+                  "--green-40", "--red-40", "--yellow-30", "--blue-50", "--purple-50"];
+const CAT_LIGHT = ["--blue-60", "--orange-60", "--teal-60", "--purple-70",
+                   "--green-60", "--red-60", "--gray-70", "--blue-80", "--purple-60"];
+function isDarkTheme() {
+  return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+function catCol(i) {
+  const a = isDarkTheme() ? CAT_DARK : CAT_LIGHT;
+  return cssVar(a[((i % a.length) + a.length) % a.length]);
+}
 // Difficulty-ribbon moving-average windows, in epochs (~2 weeks each): ~2 months
 // to ~2.3 years. Light→dark = fast→slow.
 const RIBBON_WIN = [2, 4, 7, 11, 17, 26, 40, 60];
@@ -1636,7 +1647,9 @@ function drawDiff() {
   const W = card.clientWidth - 32, H = 300, m = { t: 20, r: 20, b: 30, l: 56 };
   svg.setAttribute("width", W); svg.setAttribute("height", H);
   const pw = W - m.l - m.r, ph = H - m.t - m.b;
-  const t0 = rows[0].start_time, t1 = tipTime();
+  // right edge = end of the last epoch in scope (the live tip only for the
+  // in-progress epoch); otherwise a past era would stretch to today
+  const t0 = rows[0].start_time, t1 = rows[rows.length - 1].end_time || tipTime();
   const x = t => m.l + pw * (t - t0) / Math.max(1, t1 - t0);
   const vals = rows.map(r => r.difficulty);
   let y, yTickVals;
@@ -1838,7 +1851,7 @@ function drawCumYTD() {
   }
   el("line", { class: "zero", x1: m.l, x2: m.l + pw, y1: y(0), y2: y(0) }, svg);
   series.forEach((s, i) => {
-    const col = cssVar(CAT_COL[(s.yr - y0) % CAT_COL.length]);
+    const col = catCol(s.yr - y0);
     const cur = s.yr === curYear;
     let p = "";
     for (const pt of s.pts) p += (p ? "L" : "M") + x(pt[0]) + " " + y(pt[1]);
@@ -1912,7 +1925,7 @@ function drawHist() {
   }
   const single = S.histgroup === "all";
   groups.forEach((g, gi) => {
-    const col = single ? cssVar("--data-pos") : cssVar(CAT_COL[gi % CAT_COL.length]);
+    const col = single ? cssVar("--data-pos") : catCol(gi);
     // frequency polygon (density line) through bin centres
     let p = "";
     for (let i = 0; i < nbins; i++) p += (p ? "L" : "M") + xc(i) + " " + y(dens[g][i]);
