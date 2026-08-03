@@ -748,6 +748,11 @@ h3 { font: 700 16px/1.375 var(--font-sans); letter-spacing: 0; margin: 0; }
 .key .pos { background: var(--data-pos); }
 .key .neg { background: var(--data-neg); }
 svg.chart { display: block; width: 100%; }
+.chartlegend { display: flex; flex-wrap: wrap; gap: var(--spacing-03) var(--spacing-05);
+  margin-top: var(--spacing-03); font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px;
+  color: var(--text-secondary); }
+.chartlegend span { display: inline-flex; align-items: center; gap: 6px; }
+.chartlegend i { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
 svg.chart text { font: 400 11px/1 var(--font-sans); fill: var(--text-helper); }
 svg.chart .grid { stroke: var(--chart-grid); stroke-width: 1; }
 svg.chart .zero { stroke: var(--chart-axis); stroke-width: 1; }
@@ -951,6 +956,10 @@ __CSS__</head><body>
       <span><span class="switcher" id="scale" role="group" aria-label="Y scale">
         <button data-s="linear" aria-pressed="true">Linear</button>
         <button data-s="log" aria-pressed="false">Log</button>
+      </span><span class="switcher" id="ribbon" role="group" aria-label="Difficulty ribbon"
+        title="Difficulty Ribbon: a fan of moving averages of difficulty. When the fast (light) averages compress into or below the slow (dark) ones, hashrate is falling — historically a miner-capitulation signal.">
+        <button data-rib="off" aria-pressed="true">Line</button>
+        <button data-rib="on" aria-pressed="false">Ribbon</button>
       </span><button class="ghost" id="dl-diff" title="Download chart as PNG">PNG</button></span></div>
     <svg class="chart" id="chart-diff" height="300" role="img" aria-label="Difficulty over time"></svg>
     <div class="tooltip" id="tt-diff"></div>
@@ -961,6 +970,25 @@ __CSS__</head><body>
       <span><span class="key"><span><i class="pos"></i>Increase</span><span><i class="neg"></i>Decrease</span></span><button class="ghost" id="dl-adj" title="Download chart as PNG">PNG</button></span></div>
     <svg class="chart" id="chart-adj" height="260" role="img" aria-label="Difficulty adjustment per epoch"></svg>
     <div class="tooltip" id="tt-adj"></div>
+  </div>
+
+  <div class="card">
+    <div class="cardhead"><h3><span class="info" title="For each year, difficulty's cumulative % change since Jan 1, plotted against day-of-year. Overlaying years shows how growth has differed across halving eras — recent (post-halving) years tend to climb faster.">Cumulative change by year</span></h3></div>
+    <svg class="chart" id="chart-ytd" height="300" role="img" aria-label="Cumulative difficulty change since Jan 1, by year"></svg>
+    <div class="chartlegend" id="ytd-legend"></div>
+    <div class="tooltip" id="tt-ytd"></div>
+  </div>
+
+  <div class="card">
+    <div class="cardhead"><h3><span class="info" title="How often difficulty adjustments of a given size have occurred. Bars are counts per size bucket; the grouping colours each bar by halving era or by year so you can see how the distribution shifted over time.">Adjustment distribution</span></h3>
+      <span class="switcher" id="histgroup" role="group" aria-label="Histogram grouping">
+        <button data-g="all" aria-pressed="true">All</button>
+        <button data-g="era" aria-pressed="false">By halving era</button>
+        <button data-g="year" aria-pressed="false">By year</button>
+      </span></div>
+    <svg class="chart" id="chart-hist" height="280" role="img" aria-label="Distribution of difficulty adjustments"></svg>
+    <div class="chartlegend" id="hist-legend"></div>
+    <div class="tooltip" id="tt-hist"></div>
   </div>
   </section>
 
@@ -999,8 +1027,16 @@ __CSS__</head><body>
 </main>
 <script>
 "use strict";
-const S = { rows: [], summary: null, range: "all", scale: "linear",
-            sort: { key: "epoch", dir: -1 }, page: 0, basis: 365 };
+const S = { rows: [], summary: null, range: "all", scale: "linear", ribbon: false,
+            sort: { key: "epoch", dir: -1 }, page: 0, basis: 365, histgroup: "all" };
+// categorical palette for year / era series (CVD-aware, distinct in both themes)
+const CAT_COL = ["--blue-60", "--orange-50", "--teal-60", "--purple-60",
+                 "--green-50", "--yellow-30", "--red-60", "--blue-40", "--violet-70"];
+// Difficulty-ribbon moving-average windows, in epochs (~2 weeks each): ~2 months
+// to ~2.3 years. Light→dark = fast→slow.
+const RIBBON_WIN = [2, 4, 7, 11, 17, 26, 40, 60];
+const RIBBON_COL = ["--blue-20", "--blue-30", "--blue-40", "--blue-50",
+                    "--blue-60", "--blue-70", "--blue-80", "--violet-70"];
 const PAGE_SIZE = 25;
 const RANGE_S = { "4y": 4 * 365.25 * 86400, "3y": 3 * 365.25 * 86400,
                   "2y": 2 * 365.25 * 86400, "1y": 365.25 * 86400, "90d": 90 * 86400 };
@@ -1075,14 +1111,25 @@ function diffAt(t) {
 }
 
 // -- data ---------------------------------------------------------------------
+// The epoch history (~470 rows) changes only every ~2 weeks, so cache it in
+// localStorage and paint from it instantly on load; then refresh in the
+// background. Removes the blank-page lag while the full history round-trips.
+const CACHE_KEY = "bd-epochs-v1";
+function hydrate() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if (c && c.rows && c.rows.length) { S.rows = c.rows; render(); }
+  } catch (e) { /* ignore corrupt cache */ }
+}
 async function fetchAll() {
   try {
-    const [er, sr] = await Promise.all([
-      fetch("api/epochs", { cache: "no-store" }), fetch("api/summary", { cache: "no-store" })]);
+    const sr = await fetch("api/summary", { cache: "no-store" });
+    S.summary = await sr.json(); render();               // tiles first — small + fast
+    const er = await fetch("api/epochs", { cache: "no-store" });
     S.rows = (await er.json()).rows;
-    S.summary = await sr.json();
-  } catch (e) { S.summary = { status: "error", message: "UI unreachable" }; }
-  render();
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ rows: S.rows, t: Date.now() })); } catch (e) { }
+    render();
+  } catch (e) { S.summary = { status: "error", message: "UI unreachable" }; render(); }
 }
 
 function tipTime() {
@@ -1583,14 +1630,35 @@ function drawDiff() {
       .textContent = fmtCompact(v, 0);
   }
   drawXAxis(svg, t0, t1, x, Math.min(6, Math.max(2, Math.floor(pw / 90))), H - 8);
-  // step-after path: difficulty holds constant across each epoch
+  // difficulty ribbon: a fan of moving averages of the difficulty series
+  if (S.ribbon) {
+    const diffs = S.rows.map(r => r.difficulty);
+    const ma = w => {
+      const out = []; let sum = 0;
+      for (let i = 0; i < diffs.length; i++) {
+        sum += diffs[i]; if (i >= w) sum -= diffs[i - w];
+        out[i] = sum / Math.min(i + 1, w);
+      }
+      return out;
+    };
+    RIBBON_WIN.forEach((w, k) => {
+      const arr = ma(w);
+      let p = "";
+      for (const r of rows) p += (p ? "L" : "M") + x(r.start_time) + " " + y(arr[r.epoch]);
+      el("path", { d: p, fill: "none", stroke: cssVar(RIBBON_COL[k]),
+        "stroke-width": 1.5, "stroke-linejoin": "round", opacity: 0.9 }, svg);
+    });
+  }
+  // step-after path: difficulty holds constant across each epoch. Faint when the
+  // ribbon is on so the moving-average fan reads as the primary series.
   let d = "M" + x(rows[0].start_time) + " " + y(rows[0].difficulty);
   for (let i = 1; i < rows.length; i++) {
     d += "H" + x(rows[i].start_time) + "V" + y(rows[i].difficulty);
   }
   d += "H" + x(t1);
-  el("path", { d, fill: "none", stroke: cssVar("--data-pos"),
-    "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  el("path", { d, fill: "none", stroke: cssVar(S.ribbon ? "--chart-axis" : "--data-pos"),
+    "stroke-width": S.ribbon ? 1 : 2, "stroke-linejoin": "round", "stroke-linecap": "round",
+    opacity: S.ribbon ? 0.5 : 1 }, svg);
   // end marker: >=8px dot with a 2px surface ring, endpoint direct label
   const last = rows[rows.length - 1];
   const ex = x(t1), ey = y(last.difficulty);
@@ -1689,6 +1757,135 @@ function drawAdj() {
     hit.addEventListener("pointerleave", () => {
       bar.removeAttribute("opacity"); tt.style.display = "none";
     });
+  });
+}
+
+// -- cumulative change since Jan 1, one line per year ---------------------------
+function drawCumYTD() {
+  const svg = document.getElementById("chart-ytd"), card = svg.parentNode;
+  const legend = document.getElementById("ytd-legend"), tt = document.getElementById("tt-ytd");
+  svg.textContent = ""; legend.textContent = "";
+  const rows = S.rows;
+  if (!rows.length) return;
+  const now = tipTime(), curYear = new Date(now * 1000).getUTCFullYear();
+  const y0 = new Date(rows[0].start_time * 1000).getUTCFullYear();
+  // build one series per year: [dayOfYear, cumulative % vs Jan-1 difficulty]
+  const series = [];
+  for (let yr = y0; yr <= curYear; yr++) {
+    const jan1 = Date.UTC(yr, 0, 1) / 1000;
+    const base = diffAt(Math.max(jan1, rows[0].start_time));
+    if (base == null) continue;
+    const pts = [];
+    if (jan1 >= rows[0].start_time) pts.push([0, 0]);
+    for (const r of rows) {
+      const t = r.start_time;
+      if (t < jan1 || new Date(t * 1000).getUTCFullYear() !== yr) continue;
+      pts.push([(t - jan1) / 86400, r.difficulty / base - 1]);
+    }
+    const endT = Math.min(now, Date.UTC(yr + 1, 0, 1) / 1000);
+    pts.push([(endT - jan1) / 86400, diffAt(endT) / base - 1]);
+    if (pts.length > 1) series.push({ yr, pts });
+  }
+  if (!series.length) return;
+  const W = card.clientWidth - 32, H = 300, m = { t: 16, r: 16, b: 26, l: 48 };
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  let lo = 0, hi = 0;
+  for (const s of series) for (const p of s.pts) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }
+  hi *= 1.05; lo *= 1.05;
+  const x = doy => m.l + pw * doy / 366;
+  const y = v => m.t + ph * (1 - (v - lo) / (hi - lo || 1));
+  for (const v of niceTicks(lo, hi, 5)) {
+    el("line", { class: "grid", x1: m.l, x2: m.l + pw, y1: y(v), y2: y(v) }, svg);
+    el("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg).textContent = fmtPct(v, 0);
+  }
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  for (let mo = 0; mo < 12; mo += 2) {
+    const doy = (Date.UTC(2025, mo, 1) - Date.UTC(2025, 0, 1)) / 86400e3;
+    el("text", { x: x(doy), y: H - 8, "text-anchor": "middle" }, svg).textContent = MON[mo];
+  }
+  el("line", { class: "zero", x1: m.l, x2: m.l + pw, y1: y(0), y2: y(0) }, svg);
+  series.forEach((s, i) => {
+    const col = cssVar(CAT_COL[(s.yr - y0) % CAT_COL.length]);
+    const cur = s.yr === curYear;
+    let p = "";
+    for (const pt of s.pts) p += (p ? "L" : "M") + x(pt[0]) + " " + y(pt[1]);
+    el("path", { d: p, fill: "none", stroke: col, "stroke-width": cur ? 2.5 : 1.5,
+      "stroke-linejoin": "round", opacity: cur ? 1 : 0.85 }, svg);
+    const sp = document.createElement("span");
+    const sw = document.createElement("i"); sw.style.background = col;
+    sp.append(sw, document.createTextNode(s.yr + (cur ? " (YTD)" : "")));
+    legend.appendChild(sp);
+  });
+}
+
+// -- adjustment distribution histogram, optionally grouped ----------------------
+function drawHist() {
+  const svg = document.getElementById("chart-hist"), card = svg.parentNode;
+  const legend = document.getElementById("hist-legend"), tt = document.getElementById("tt-hist");
+  svg.textContent = ""; legend.textContent = "";
+  const changed = S.rows.filter(r => r.change != null);
+  if (!changed.length) return;
+  const BIN = 0.01;   // 1-percentage-point buckets
+  let lo = Infinity, hi = -Infinity;
+  for (const r of changed) { lo = Math.min(lo, r.change); hi = Math.max(hi, r.change); }
+  const b0 = Math.floor(lo / BIN), b1 = Math.ceil(hi / BIN);
+  const nbins = b1 - b0;
+  // group key + ordered group list
+  const groupOf = r => {
+    if (S.histgroup === "year") return String(new Date(r.start_time * 1000).getUTCFullYear());
+    if (S.histgroup === "era") {
+      const era = Math.floor(r.start_height / 210000);   // halving era index
+      const subs = 50 / Math.pow(2, era);
+      return subs >= 1 ? subs + " BTC era" : (subs * 1e8) + " sat era";
+    }
+    return "All";
+  };
+  const groups = [];
+  const bins = {};   // group -> Int array over bins
+  for (const r of changed) {
+    const g = groupOf(r);
+    if (!(g in bins)) { bins[g] = new Array(nbins).fill(0); groups.push(g); }
+    bins[g][Math.floor(r.change / BIN) - b0] += 1;
+  }
+  groups.sort();
+  const totals = new Array(nbins).fill(0);
+  for (const g of groups) for (let i = 0; i < nbins; i++) totals[i] += bins[g][i];
+  const maxCount = Math.max(1, ...totals);
+  const W = card.clientWidth - 32, H = 280, m = { t: 16, r: 16, b: 30, l: 40 };
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const x = b => m.l + pw * b / nbins, bw = pw / nbins;
+  const y = c => m.t + ph * (1 - c / (maxCount * 1.05));
+  for (const v of niceTicks(0, maxCount * 1.05, 4)) {
+    el("line", { class: "grid", x1: m.l, x2: m.l + pw, y1: y(v), y2: y(v) }, svg);
+    el("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg).textContent = String(Math.round(v));
+  }
+  // x ticks at each whole 5% and at 0
+  for (let b = b0; b <= b1; b++) {
+    const pct = b * BIN;
+    if (Math.abs(pct * 100) % 5 < 0.5) {
+      const px = x(b - b0);
+      el("line", { class: b === 0 ? "zero" : "grid", x1: px, x2: px, y1: m.t, y2: m.t + ph }, svg);
+      el("text", { x: px, y: H - 8, "text-anchor": "middle" }, svg).textContent = fmtPct(pct, 0);
+    }
+  }
+  const single = S.histgroup === "all";
+  groups.forEach((g, gi) => {
+    const col = single ? cssVar("--data-pos") : cssVar(CAT_COL[gi % CAT_COL.length]);
+    for (let i = 0; i < nbins; i++) {
+      const c = bins[g][i]; if (!c) continue;
+      let below = 0; for (let k = 0; k < gi; k++) below += bins[groups[k]][i];
+      const yTop = y(below + c), yBot = y(below);
+      el("rect", { x: x(i) + 0.5, width: Math.max(0.5, bw - 1), y: yTop, height: Math.max(0, yBot - yTop),
+        fill: col }, svg);
+    }
+    if (!single) {
+      const sp = document.createElement("span");
+      const sw = document.createElement("i"); sw.style.background = col; sw.style.height = "10px";
+      sp.append(sw, document.createTextNode(g));
+      legend.appendChild(sp);
+    }
   });
 }
 
@@ -1833,7 +2030,7 @@ async function downloadChart(svgId, name) {
 // -- wiring ---------------------------------------------------------------------
 function render() {
   renderPill(); renderTiles(); renderCalendar(); renderRecords(); renderGrowth();
-  drawDiff(); drawAdj(); renderProjection(); renderTable();
+  drawDiff(); drawAdj(); drawCumYTD(); drawHist(); renderProjection(); renderTable();
 }
 
 const diffFull = document.getElementById("t-diff-full");
@@ -1859,6 +2056,20 @@ document.getElementById("scale").addEventListener("click", ev => {
   for (const x of ev.currentTarget.querySelectorAll("button"))
     x.setAttribute("aria-pressed", String(x === b));
   drawDiff();
+});
+document.getElementById("ribbon").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  S.ribbon = b.dataset.rib === "on";
+  for (const x of ev.currentTarget.querySelectorAll("button"))
+    x.setAttribute("aria-pressed", String(x === b));
+  drawDiff();
+});
+document.getElementById("histgroup").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  S.histgroup = b.dataset.g;
+  for (const x of ev.currentTarget.querySelectorAll("button"))
+    x.setAttribute("aria-pressed", String(x === b));
+  drawHist();
 });
 document.getElementById("basis").addEventListener("click", ev => {
   const b = ev.target.closest("button"); if (!b) return;
@@ -1886,9 +2097,10 @@ function updateNav() {
 }
 window.addEventListener("scroll", updateNav, { passive: true });
 let rsz;
-window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { drawDiff(); drawAdj(); }, 150); });
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawDiff(); drawAdj(); });
+window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(() => { drawDiff(); drawAdj(); drawCumYTD(); drawHist(); }, 150); });
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawDiff(); drawAdj(); drawCumYTD(); drawHist(); });
 
+hydrate();
 fetchAll();
 setInterval(fetchAll, 60000);
 </script>
