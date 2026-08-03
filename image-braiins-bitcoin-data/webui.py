@@ -742,6 +742,7 @@ td.copyable:hover { text-decoration: underline dotted var(--border-strong); }
 .switcher button:hover { background: var(--layer-hover); }
 .switcher button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .switcher button[aria-pressed="true"] { background: var(--gray-100); color: #fff; }
+.scopesep { width: 1px; align-self: stretch; background: var(--border-strong); margin: 0 var(--spacing-03); }
 
 .card { background: var(--layer-01); padding: var(--spacing-05); margin-bottom: var(--spacing-06); position: relative; }
 .cardhead { display: flex; align-items: center; justify-content: space-between;
@@ -945,8 +946,8 @@ __CSS__</head><body>
 
   <section id="charts">
   <div class="filters">
-    <span class="flabel">Range</span>
-    <span class="switcher" id="range" role="group" aria-label="Date range">
+    <span class="flabel">Scope</span>
+    <span class="switcher" id="range" role="group" aria-label="Scope: time window or halving era">
       <button data-r="all" aria-pressed="true">All</button>
       <button data-r="4y" aria-pressed="false">4y</button>
       <button data-r="3y" aria-pressed="false">3y</button>
@@ -1141,10 +1142,33 @@ function tipTime() {
   return (S.summary && S.summary.tip_time) ||
          (S.rows.length ? S.rows[S.rows.length - 1].start_time : 0);
 }
+function eraSubsidy(r) { return 50 / Math.pow(2, Math.floor(r.start_height / 210000)); }
 function filteredRows() {
   if (S.range === "all") return S.rows;
-  const cutoff = tipTime() - RANGE_S[S.range];
+  if (S.range.slice(0, 4) === "era:") {              // scope = one halving era
+    const subs = parseFloat(S.range.slice(4));
+    return S.rows.filter(r => Math.abs(eraSubsidy(r) - subs) < 1e-9);
+  }
+  const cutoff = tipTime() - RANGE_S[S.range];         // scope = trailing window
   return S.rows.filter(r => (r.end_time || tipTime()) >= cutoff);
+}
+// Append one chip per halving era present in the data, into the scope switcher
+// (mutually exclusive with the time chips via the shared group handler). Built
+// once, since eras only appear as the chain advances.
+let eraButtonsBuilt = false;
+function buildEraButtons() {
+  if (eraButtonsBuilt || !S.rows.length) return;
+  eraButtonsBuilt = true;
+  const grp = document.getElementById("range");
+  const eras = [...new Set(S.rows.map(eraSubsidy))].sort((a, b) => b - a);  // 50→…→3.125
+  const sep = document.createElement("span"); sep.className = "scopesep"; grp.appendChild(sep);
+  for (const s of eras) {
+    const b = document.createElement("button");
+    b.dataset.r = "era:" + s; b.setAttribute("aria-pressed", "false");
+    b.textContent = (s >= 1 ? s : +s.toFixed(4)) + "₿";   // ₿
+    b.title = "Only the " + (s >= 1 ? s : +s.toFixed(4)) + " BTC subsidy era (a halving epoch)";
+    grp.appendChild(b);
+  }
 }
 
 // -- pill & tiles --------------------------------------------------------------
@@ -1774,9 +1798,12 @@ function drawCumYTD() {
   if (!rows.length) return;
   const now = tipTime(), curYear = new Date(now * 1000).getUTCFullYear();
   const y0 = new Date(rows[0].start_time * 1000).getUTCFullYear();
-  // build one series per year: [dayOfYear, cumulative % vs Jan-1 difficulty]
+  // which years to draw: those present in the current scope (time window or
+  // era). Lines are still computed from the full data so each year is complete.
+  const shownYears = new Set(filteredRows().map(r => new Date(r.start_time * 1000).getUTCFullYear()));
   const series = [];
   for (let yr = y0; yr <= curYear; yr++) {
+    if (!shownYears.has(yr)) continue;
     const jan1 = Date.UTC(yr, 0, 1) / 1000;
     const base = diffAt(Math.max(jan1, rows[0].start_time));
     if (base == null) continue;
@@ -2043,6 +2070,7 @@ async function downloadChart(svgId, name) {
 
 // -- wiring ---------------------------------------------------------------------
 function render() {
+  buildEraButtons();
   renderPill(); renderTiles(); renderCalendar(); renderRecords(); renderGrowth();
   drawDiff(); drawAdj(); drawCumYTD(); drawHist(); renderProjection(); renderTable();
 }
@@ -2062,7 +2090,7 @@ document.getElementById("range").addEventListener("click", ev => {
   S.range = b.dataset.r; S.page = 0;
   for (const x of ev.currentTarget.querySelectorAll("button"))
     x.setAttribute("aria-pressed", String(x === b));
-  drawDiff(); drawAdj(); drawHist(); renderTable();
+  drawDiff(); drawAdj(); drawCumYTD(); drawHist(); renderTable();
 });
 document.getElementById("scale").addEventListener("click", ev => {
   const b = ev.target.closest("button"); if (!b) return;
