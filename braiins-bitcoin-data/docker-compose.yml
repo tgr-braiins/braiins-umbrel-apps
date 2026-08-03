@@ -10,7 +10,7 @@ services:
     # TODO: move to a Braiins-owned registry before official-store submission.
     # The tag@digest is written by bump.py `pin` after the release workflow
     # pushes the multi-arch image (see .github/workflows/braiins-bitcoin-data-release.yml).
-    image: ghcr.io/tgr-braiins/braiins-bitcoin-data:1.5.0@sha256:080815e0950851d09cb434e21785a48a0b24a8b6838bdcb8f00cd8acd83735a7
+    image: ghcr.io/tgr-braiins/braiins-bitcoin-data:1.6.0@sha256:be361173237ce3bc4b6e597ebcbf60d2f12630c68383ba8e2b545f9c575f4d6b
     user: "1000:1000"
     init: true
     restart: on-failure
@@ -18,7 +18,7 @@ services:
     environment:
       # Shown in the app's web UI footer. Kept in sync with the manifest
       # `version` by bump.py.
-      APP_VERSION: "1.5.0"
+      APP_VERSION: "1.6.0"
       # Exported by the official bitcoin app for dependent apps.
       BITCOIN_RPC_HOST: $APP_BITCOIN_NODE_IP
       BITCOIN_RPC_PORT: $APP_BITCOIN_RPC_PORT

@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.6.0] - 2026-08-03
+
+Monthly change now shows 3-year and 5-year averages per calendar month (e.g. January = mean of the last three completed Januaries), completed months only. Records now has four top-5 tables: longest and biggest consecutive increases, longest and deepest consecutive decreases.
+
 ## [1.5.0] - 2026-08-03
 
 Records now include the longest and biggest consecutive difficulty increases and the longest and deepest consecutive decreases. Monthly change adds 3-year and 5-year averages over completed months. New 2y and 3y chart ranges. Headline stat tiles reformatted so hashrate and the next-adjustment label no longer wrap.

@@ -2,7 +2,7 @@ manifestVersion: 1.1
 id: braiins-bitcoin-data
 category: bitcoin
 name: Bitcoin Data
-version: "1.5.0"
+version: "1.6.0"
 tagline: Difficulty epochs, charted from your own Bitcoin node
 description: >-
   Bitcoin Data reads the blockchain from your own Bitcoin node and presents
