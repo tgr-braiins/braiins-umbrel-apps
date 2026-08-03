@@ -693,6 +693,17 @@ main section { scroll-margin-top: 52px; }
 @media (max-width: 480px) { .tiles { grid-template-columns: 1fr; } }
 .tile { background: var(--layer-01); padding: var(--spacing-05); min-height: 120px; }
 .tile .label { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
+/* tooltip affordance: dotted underline + help cursor on anything with a title */
+.info { text-decoration: underline dotted var(--border-strong); text-underline-offset: 3px; cursor: help; }
+h3 .info { text-decoration-color: var(--border-strong); }
+/* record-participation callout banner */
+.highlights { display: none; flex-direction: column; gap: var(--spacing-02);
+  background: var(--layer-01); border-left: 3px solid var(--violet-60);
+  padding: var(--spacing-04) var(--spacing-05); margin-bottom: var(--spacing-06); }
+.highlights.on { display: flex; }
+.highlights .hl { font: 400 13px/1.4 var(--font-sans); letter-spacing: .16px; color: var(--text-primary); }
+.highlights .hl b { font-weight: 700; }
+.highlights .rank { color: var(--violet-60); font-weight: 700; }
 .tile .value { font: 700 24px/1.29 var(--font-sans); letter-spacing: 0; margin: var(--spacing-03) 0 var(--spacing-02);
   white-space: nowrap; }
 .tile .value small { font-size: 14px; font-weight: 400; color: var(--text-secondary); margin-left: .15em; white-space: nowrap; }
@@ -837,27 +848,28 @@ __CSS__</head><body>
   </nav>
 
   <section id="overview">
+  <div class="highlights" id="highlights"></div>
   <div class="tiles">
-    <div class="tile"><div class="label">Difficulty</div>
+    <div class="tile"><div class="label info" title="Network difficulty — how hard it is to find a block, as a multiple of the easiest possible target. It retargets every 2,016 blocks (~2 weeks) to keep blocks near 10 minutes.">Difficulty</div>
       <div class="value" id="t-diff">—</div>
       <div class="delta" id="t-diff-delta"></div>
       <span class="copyline" id="t-diff-full" role="button" tabindex="0"
         title="Click to copy the exact value"></span>
       <div class="sub" id="t-diff-sub"></div></div>
-    <div class="tile"><div class="label">Next adjustment</div>
+    <div class="tile"><div class="label info" title="Projected difficulty change at the next retarget, extrapolated from this epoch's average block time. Only meaningful after ~10 blocks; a single retarget is capped at +300% / −75%.">Next adjustment</div>
       <div class="value" id="t-proj">—</div>
       <div class="sub" id="t-proj-sub"></div></div>
-    <div class="tile"><div class="label">Epoch progress</div>
+    <div class="tile"><div class="label info" title="How far into the current 2,016-block retarget period the chain is.">Epoch progress</div>
       <div class="value" id="t-prog">—</div>
       <div class="meter"><i id="t-prog-bar" style="width:0%"></i></div>
       <div class="sub" id="t-prog-sub"></div></div>
-    <div class="tile"><div class="label">Est. network hashrate</div>
+    <div class="tile"><div class="label info" title="Estimated network hashrate = difficulty × 2³² ÷ average block time this epoch. It is an estimate — true hashrate cannot be observed directly, only inferred from how fast blocks arrive.">Est. network hashrate</div>
       <div class="value" id="t-hash">—</div>
       <div class="sub" id="t-hash-sub">current epoch average</div></div>
-    <div class="tile"><div class="label">Hashvalue (1 PH/s)</div>
+    <div class="tile"><div class="label info" title="Expected earnings of 1 PH/s per day at current difficulty: the block subsidy plus this epoch's average fees. Historical and per-epoch table values are subsidy-only — past per-block fees aren't retained.">Hashvalue (1 PH/s)</div>
       <div class="value" id="t-hv">—<small>sats/day</small></div>
       <div class="sub" id="t-hv-sub"></div></div>
-    <div class="tile"><div class="label">Halving countdown</div>
+    <div class="tile"><div class="label info" title="Blocks until the next block-subsidy halving (every 210,000 blocks, ~4 years) and its projected date. The subsidy is the newly-issued BTC paid to the miner of each block.">Halving countdown</div>
       <div class="value" id="t-halv">—<small>blocks</small></div>
       <div class="sub" id="t-halv-sub"></div></div>
   </div>
@@ -865,10 +877,10 @@ __CSS__</head><body>
 
   <section id="annual">
   <div class="card">
-    <div class="cardhead"><h3>By year</h3></div>
+    <div class="cardhead"><h3><span class="info" title="Difficulty in effect at 00:00 UTC on Jan 1 of each year, the implied hashrate at that difficulty, and the change across the year (year-to-date for the current year).">By year</span></h3></div>
     <div class="statrow" id="growth"></div>
     <div class="tablewrap"><table id="years">
-      <thead><tr><th>Year</th><th>Difficulty on Jan 1</th><th>Exact value</th><th>Est. hashrate</th><th>Change over year</th></tr></thead>
+      <thead><tr><th>Year</th><th>Difficulty on Jan 1</th><th>Exact value</th><th><span class="info" title="Hashrate implied by that Jan-1 difficulty at the 10-minute target (difficulty × 2³² ÷ 600).">Est. hashrate</span></th><th>Change over year</th></tr></thead>
       <tbody></tbody>
     </table></div>
     <p class="note">Difficulty in effect at 00:00 UTC on Jan 1; hashrate implied at the 10-minute target. The current year shows year-to-date. Click an exact value to copy it.</p>
@@ -877,7 +889,7 @@ __CSS__</head><body>
 
   <section id="monthly">
   <div class="card">
-    <div class="cardhead"><h3>Monthly change</h3>
+    <div class="cardhead"><h3><span class="info" title="Difficulty change within each calendar month — from its first to its last moment (UTC). The top two rows average each month across the last 3 and 5 completed years (an incomplete current month is skipped).">Monthly change</span></h3>
       <span class="key"><span><i class="pos"></i>Increase</span><span><i class="neg"></i>Decrease</span></span></div>
     <div class="tablewrap"><table id="months" class="cal">
       <thead><tr></tr></thead><tbody></tbody>
@@ -888,7 +900,7 @@ __CSS__</head><body>
 
   <section id="records">
   <div class="card">
-    <div class="cardhead"><h3>Records</h3></div>
+    <div class="cardhead"><h3><span class="info" title="All-time extremes in the difficulty series: the largest single adjustments, the longest and largest consecutive runs, and the longest stretches below a prior all-time high.">Records</span></h3></div>
     <div class="recgrid">
       <div class="tablewrap"><table id="rec-up">
         <thead><tr><th>Largest increases</th><th>Epoch</th><th>Date</th></tr></thead><tbody></tbody>
@@ -914,7 +926,7 @@ __CSS__</head><body>
     </div>
     <p class="note">Runs of consecutive up- or down-adjustments (top 5 each). Total change compounds every step, so the longest run and the biggest/deepest run can differ.</p>
     <div class="tablewrap" style="margin-top: var(--spacing-05)"><table id="drawdowns">
-      <thead><tr><th>Longest without a new ATH</th><th>From</th><th>Until</th><th>Max drawdown</th></tr></thead>
+      <thead><tr><th><span class="info" title="Stretches where difficulty stayed below a previous all-time high before setting a new one.">Longest without a new ATH</span></th><th>From</th><th>Until</th><th><span class="info" title="The deepest the difficulty fell below the prior ATH during that stretch.">Max drawdown</span></th></tr></thead>
       <tbody></tbody>
     </table></div>
     <p class="note">Stretches where difficulty stayed below its previous all-time high; drawdown is the deepest dip within the stretch.</p>
@@ -935,7 +947,7 @@ __CSS__</head><body>
   </div>
 
   <div class="card">
-    <div class="cardhead"><h3>Difficulty over time</h3>
+    <div class="cardhead"><h3><span class="info" title="Difficulty at each retarget over the selected range. Log scale makes multi-year exponential growth read as a straight line.">Difficulty over time</span></h3>
       <span><span class="switcher" id="scale" role="group" aria-label="Y scale">
         <button data-s="linear" aria-pressed="true">Linear</button>
         <button data-s="log" aria-pressed="false">Log</button>
@@ -945,7 +957,7 @@ __CSS__</head><body>
   </div>
 
   <div class="card">
-    <div class="cardhead"><h3>Adjustment per epoch</h3>
+    <div class="cardhead"><h3><span class="info" title="The percentage difficulty change at each 2,016-block retarget — positive when blocks came faster than 10 min, negative when slower.">Adjustment per epoch</span></h3>
       <span><span class="key"><span><i class="pos"></i>Increase</span><span><i class="neg"></i>Decrease</span></span><button class="ghost" id="dl-adj" title="Download chart as PNG">PNG</button></span></div>
     <svg class="chart" id="chart-adj" height="260" role="img" aria-label="Difficulty adjustment per epoch"></svg>
     <div class="tooltip" id="tt-adj"></div>
@@ -954,7 +966,7 @@ __CSS__</head><body>
 
   <section id="projection">
   <div class="card">
-    <div class="cardhead"><h3>Projection</h3>
+    <div class="cardhead"><h3><span class="info" title="Compound extrapolation of a trailing growth window to future dates — a what-if, not a forecast. Hashvalue accounts for the halving schedule.">Projection</span></h3>
       <span class="switcher" id="basis" role="group" aria-label="Growth basis">
         <button data-b="91" aria-pressed="false">3m trend</button>
         <button data-b="182" aria-pressed="false">6m trend</button>
@@ -1261,6 +1273,46 @@ function renderRecords() {
     tr.append(dur, f, t, d);
     dtb.appendChild(tr);
   }
+
+  // highlights: does the CURRENT pattern place in any of the top-5 records?
+  const box = document.getElementById("highlights");
+  box.textContent = ""; box.classList.remove("on");
+  const ord = k => k + (["th", "st", "nd", "rd"][k % 10 > 3 || (k % 100 >= 11 && k % 100 <= 13) ? 0 : k % 10]);
+  const rankIn = (arr, item) => { const i = arr.indexOf(item); return i >= 0 && i < 5 ? i + 1 : null; };
+  const add = (dir, html) => {
+    const p = document.createElement("p"); p.className = "hl";
+    const dot = document.createElement("span");
+    dot.className = "dirdot " + dir; dot.style.marginRight = "6px";
+    p.appendChild(dot); p.insertAdjacentHTML("beforeend", html); box.appendChild(p);
+  };
+  const say = (k, what) => "<span class='rank'>" + ord(k) + "</span> " + what;
+  // latest single adjustment
+  const latest = changed[changed.length - 1];
+  if (latest) {
+    const up = latest.change >= 0, dir = up ? "up" : "down";
+    const k = rankIn(up ? sorted : sorted.slice().reverse(), latest);
+    if (k) add(dir, "Latest adjustment <b>" + fmtPct(latest.change) + "</b> is the " +
+      say(k, "largest " + (up ? "increase" : "decrease") + " on record."));
+  }
+  // ongoing consecutive run
+  const cr = runs[runs.length - 1];
+  if (cr && cr.len >= 2) {
+    const up = cr.sign > 0, dir = up ? "up" : "down", word = up ? "increases" : "decreases";
+    const kL = rankIn((up ? ups : downs).slice().sort(byLen), cr);
+    const kM = rankIn((up ? ups.slice().sort(byCum) : downs.slice().sort((a, b) => a.cum - b.cum)), cr);
+    if (kL) add(dir, "Current run of <b>" + cr.len + " consecutive " + word + "</b> is the " +
+      say(kL, "longest such run on record."));
+    if (kM) add(dir, "Current run's <b>" + fmtPct(cr.cum - 1, 1) + "</b> total is the " +
+      say(kM, (up ? "biggest increase" : "deepest decrease") + " run on record."));
+  }
+  // ongoing stretch below the all-time high
+  const og = gaps.find(g => g.ongoing);
+  if (og) {
+    const kG = rankIn(gaps, og), days = Math.round((og.to - og.from) / 86400);
+    if (kG && days >= 30) add("down", "Difficulty has been below its all-time high for <b>" +
+      days + " days</b> — the " + say(kG, "longest such stretch on record."));
+  }
+  if (box.children.length) box.classList.add("on");
 }
 
 // -- growth: CAGR over trailing windows + doubling time -------------------------
@@ -1269,23 +1321,29 @@ function renderGrowth() {
   box.textContent = "";
   if (!S.rows.length || !S.summary || S.summary.difficulty == null) return;
   const now = tipTime(), cur = S.summary.difficulty;
-  const stat = (big, label) => {
+  const stat = (big, label, tip) => {
     const div = document.createElement("div");
     const b = document.createElement("b"); b.textContent = big;
     div.appendChild(b);
-    div.appendChild(document.createTextNode(label));
+    const lbl = document.createElement("span");
+    if (tip) { lbl.className = "info"; lbl.title = tip; }
+    lbl.textContent = label;
+    div.appendChild(lbl);
     box.appendChild(div);
   };
   for (const [label, years] of [["1y", 1], ["2y", 2], ["4y", 4]]) {
     const then = diffAt(now - years * 365.25 * 86400);
     if (then == null) continue;
-    stat(fmtPct(Math.pow(cur / then, 1 / years) - 1, 1) + "/yr", label + " CAGR");
+    stat(fmtPct(Math.pow(cur / then, 1 / years) - 1, 1) + "/yr", label + " CAGR",
+      "Compound annual growth rate: the constant yearly rate that takes difficulty from its value " +
+      years + " year(s) ago to today.");
   }
   const g1 = diffAt(now - 365.25 * 86400);
   if (g1 != null && cur > g1) {
     const dbl = Math.log(2) / Math.log(cur / g1);
     stat(dbl < 2 ? Math.round(dbl * 12) + " months" : dbl.toFixed(1) + " years",
-      "doubling time at 1y pace");
+      "doubling time at 1y pace",
+      "How long difficulty would take to double if it kept growing at the last 12 months' rate.");
   }
 }
 
