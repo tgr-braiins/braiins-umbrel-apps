@@ -693,8 +693,9 @@ main section { scroll-margin-top: 52px; }
 @media (max-width: 480px) { .tiles { grid-template-columns: 1fr; } }
 .tile { background: var(--layer-01); padding: var(--spacing-05); min-height: 120px; }
 .tile .label { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
-.tile .value { font: 700 28px/1.29 var(--font-sans); letter-spacing: 0; margin: var(--spacing-03) 0 var(--spacing-02); }
-.tile .value small { font-size: 16px; font-weight: 400; color: var(--text-secondary); margin-left: .15em; }
+.tile .value { font: 700 24px/1.29 var(--font-sans); letter-spacing: 0; margin: var(--spacing-03) 0 var(--spacing-02);
+  white-space: nowrap; }
+.tile .value small { font-size: 14px; font-weight: 400; color: var(--text-secondary); margin-left: .15em; white-space: nowrap; }
 .tile .sub { font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-helper); }
 .tile .delta { display: inline-flex; align-items: center; gap: 6px;
   font: 400 12px/1.3333 var(--font-sans); letter-spacing: .32px; color: var(--text-secondary); }
@@ -838,7 +839,7 @@ __CSS__</head><body>
       <span class="copyline" id="t-diff-full" role="button" tabindex="0"
         title="Click to copy the exact value"></span>
       <div class="sub" id="t-diff-sub"></div></div>
-    <div class="tile"><div class="label">Next adjustment (projected)</div>
+    <div class="tile"><div class="label">Next adjustment</div>
       <div class="value" id="t-proj">—</div>
       <div class="sub" id="t-proj-sub"></div></div>
     <div class="tile"><div class="label">Epoch progress</div>
@@ -873,6 +874,7 @@ __CSS__</head><body>
   <div class="card">
     <div class="cardhead"><h3>Monthly change</h3>
       <span class="key"><span><i class="pos"></i>Increase</span><span><i class="neg"></i>Decrease</span></span></div>
+    <div class="statrow" id="month-avg"></div>
     <div class="tablewrap"><table id="months" class="cal">
       <thead><tr></tr></thead><tbody></tbody>
     </table></div>
@@ -892,6 +894,11 @@ __CSS__</head><body>
       </table></div>
     </div>
     <p class="note" id="streaks"></p>
+    <div class="tablewrap" style="margin-top: var(--spacing-05)"><table id="runs">
+      <thead><tr><th>Consecutive run</th><th>Epochs</th><th>Total change</th><th>Period</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p class="note">Runs of consecutive up- or down-adjustments. Total change compounds every step in the run, so the longest run and the biggest/deepest run can be different.</p>
     <div class="tablewrap" style="margin-top: var(--spacing-05)"><table id="drawdowns">
       <thead><tr><th>Longest without a new ATH</th><th>From</th><th>Until</th><th>Max drawdown</th></tr></thead>
       <tbody></tbody>
@@ -906,6 +913,8 @@ __CSS__</head><body>
     <span class="switcher" id="range" role="group" aria-label="Date range">
       <button data-r="all" aria-pressed="true">All</button>
       <button data-r="4y" aria-pressed="false">4y</button>
+      <button data-r="3y" aria-pressed="false">3y</button>
+      <button data-r="2y" aria-pressed="false">2y</button>
       <button data-r="1y" aria-pressed="false">1y</button>
       <button data-r="90d" aria-pressed="false">90d</button>
     </span>
@@ -967,7 +976,8 @@ __CSS__</head><body>
 const S = { rows: [], summary: null, range: "all", scale: "linear",
             sort: { key: "epoch", dir: -1 }, page: 0, basis: 365 };
 const PAGE_SIZE = 25;
-const RANGE_S = { "4y": 4 * 365.25 * 86400, "1y": 365.25 * 86400, "90d": 90 * 86400 };
+const RANGE_S = { "4y": 4 * 365.25 * 86400, "3y": 3 * 365.25 * 86400,
+                  "2y": 2 * 365.25 * 86400, "1y": 365.25 * 86400, "90d": 90 * 86400 };
 
 // -- formatting (text wears text tokens; marks carry the color) --------------
 function fmtCompact(x, d) {
@@ -1089,7 +1099,16 @@ function renderTiles() {
   set("t-prog", s.progress != null ? (100 * s.progress).toFixed(1) + "%" : "—");
   document.getElementById("t-prog-bar").style.width = s.progress != null ? (100 * s.progress) + "%" : "0";
   set("t-prog-sub", s.elapsed != null ? fmtInt(s.elapsed) + " of 2,016 blocks" : "");
-  set("t-hash", fmtHash(s.hashrate));
+  // hashrate: big number + small unit (like the other tiles) so "EH/s" never wraps
+  const hashEl = document.getElementById("t-hash");
+  hashEl.textContent = "";
+  if (s.hashrate == null) hashEl.textContent = "—";
+  else {
+    const parts = fmtCompact(s.hashrate, 1).split(" ");   // "917.5 E" -> ["917.5","E"]
+    hashEl.appendChild(document.createTextNode(parts[0]));
+    const u = document.createElement("small"); u.textContent = (parts[1] || "") + "H/s";
+    hashEl.appendChild(u);
+  }
   set("t-hash-sub", s.avg_interval != null
     ? "avg block " + fmtInterval(s.avg_interval) + " this epoch" : "current epoch average");
   // fees-inclusive is the headline; subsidy-only only bridges the fee backfill
@@ -1139,17 +1158,52 @@ function renderRecords() {
   const sorted = changed.slice().sort((a, b) => b.change - a.change);
   fill("#rec-up", sorted.slice(0, 5));
   fill("#rec-down", sorted.slice(-5).reverse());
-  let cur = 0, prevSign = 0, best = 0, bestEnd = null;
+  let cur = 0, prevSign = 0;
   for (const r of changed) {
     const sign = r.change >= 0 ? 1 : -1;
     cur = sign === prevSign ? cur + 1 : 1;
     prevSign = sign;
-    if (sign > 0 && cur > best) { best = cur; bestEnd = r; }
   }
   document.getElementById("streaks").textContent =
     "Current streak: " + cur + " consecutive " + (prevSign >= 0 ? "increases" : "decreases") +
-    ". Record: " + best + " consecutive increases, ending " + fmtDate(bestEnd.start_time) +
     ". The in-progress epoch counts — its adjustment was fixed at the last retarget.";
+  // consecutive runs: group changed epochs by sign of the adjustment, compound
+  // the change across each run; a run's magnitude ≠ its length
+  const runs = [];
+  let run = null;
+  for (const r of changed) {
+    const sign = r.change >= 0 ? 1 : -1;
+    if (!run || run.sign !== sign) {
+      run = { sign, len: 0, cum: 1, from: r.start_time, to: r.start_time };
+      runs.push(run);
+    }
+    run.len += 1;
+    run.cum *= 1 + r.change;
+    run.to = r.start_time;
+  }
+  const ups = runs.filter(r => r.sign > 0), downs = runs.filter(r => r.sign < 0);
+  const pick = (arr, keyfn) => arr.length ? arr.reduce((a, b) => keyfn(b) > keyfn(a) ? b : a) : null;
+  const recs = [
+    ["Longest increase", pick(ups, r => r.len)],
+    ["Biggest increase", pick(ups, r => r.cum)],
+    ["Longest decrease", pick(downs, r => r.len)],
+    ["Deepest decrease", pick(downs, r => -r.cum)],   // most negative cumulative
+  ];
+  const rtb = document.querySelector("#runs tbody");
+  rtb.textContent = "";
+  for (const [label, r] of recs) {
+    if (!r) continue;
+    const tr = document.createElement("tr");
+    const c0 = document.createElement("td"); c0.style.textAlign = "left"; c0.textContent = label;
+    const c1 = document.createElement("td"); c1.textContent = r.len + " epochs";
+    const c2 = document.createElement("td");
+    const dot = document.createElement("span");
+    dot.className = "dirdot " + (r.sign > 0 ? "up" : "down"); c2.appendChild(dot);
+    c2.appendChild(document.createTextNode(fmtPct(r.cum - 1, 1)));
+    const c3 = document.createElement("td"); c3.textContent = fmtDate(r.from) + " → " + fmtDate(r.to);
+    tr.append(c0, c1, c2, c3);
+    rtb.appendChild(tr);
+  }
   // top-5 stretches without a new all-time-high difficulty
   let ath = -Infinity, from = null, low = Infinity;
   const gaps = [];
@@ -1317,6 +1371,29 @@ function renderCalendar() {
       tr.appendChild(td);
     }
     mbody.appendChild(tr);
+  }
+
+  // 3Y / 5Y average monthly change — COMPLETED months only (excludes the
+  // current partial month, and any month starting before our data begins)
+  const monthly = [];
+  for (let y = y0; y <= y1; y++) {
+    for (let m = 0; m < 12; m++) {
+      const t0 = Date.UTC(y, m, 1) / 1000, t1 = Date.UTC(y, m + 1, 1) / 1000;
+      if (t1 > now || t0 < first) continue;
+      monthly.push(valAt(t1) / valAt(t0) - 1);
+    }
+  }
+  const avgBox = document.getElementById("month-avg");
+  avgBox.textContent = "";
+  const avgOf = n => { const a = monthly.slice(-n); return a.length ? a.reduce((x, v) => x + v, 0) / a.length : null; };
+  for (const [n, lbl] of [[36, "3Y"], [60, "5Y"]]) {
+    const a = avgOf(n);
+    if (a == null) continue;
+    const div = document.createElement("div");
+    const b = document.createElement("b"); b.textContent = fmtPct(a, 2) + "/mo";
+    div.appendChild(b);
+    div.appendChild(document.createTextNode(lbl + " avg (" + Math.min(n, monthly.length) + " completed months)"));
+    avgBox.appendChild(div);
   }
 }
 
