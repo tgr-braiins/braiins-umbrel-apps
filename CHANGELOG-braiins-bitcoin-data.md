@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.12.0] - 2026-08-03
+
+Fixes chart series colours that could render invisible (a palette referenced colours the app didn't define) — year and era lines are now always legible in both themes. The cumulative-change-by-year chart gains a note explaining each line is one calendar year compounded from Jan 1.
+
 ## [1.11.0] - 2026-08-03
 
 Fixes for the era scope: the difficulty chart's time axis now ends at the selected era instead of running to today, and the year/era line colours are theme-aware so none blend into the background.
