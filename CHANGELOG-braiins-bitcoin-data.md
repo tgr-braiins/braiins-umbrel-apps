@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.11.0] - 2026-08-03
+
+Fixes for the era scope: the difficulty chart's time axis now ends at the selected era instead of running to today, and the year/era line colours are theme-aware so none blend into the background.
+
 ## [1.10.0] - 2026-08-03
 
 The Scope selector now lets you filter every chart by halving era (50 BTC … 3.125 BTC) as well as by time window, and the Cumulative-change-by-year chart now responds to the selection.
