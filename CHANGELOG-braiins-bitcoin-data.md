@@ -8,10 +8,6 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
-## [1.13.0] - 2026-08-10
-
-Removes the Signalling page — the app now focuses on difficulty only. Gone with it: the `/api/signalling` endpoint, the block-header version collector (fewer node RPC calls, smaller cache), and the `SIGNAL_BIT` setting. No difficulty features are affected.
-
 ## [1.12.0] - 2026-08-03
 
 Fixes chart series colours that could render invisible (a palette referenced colours the app didn't define) — year and era lines are now always legible in both themes. The cumulative-change-by-year chart gains a note explaining each line is one calendar year compounded from Jan 1.
