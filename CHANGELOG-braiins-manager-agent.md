@@ -13,6 +13,25 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.12.0] - 2026-09-05
+
+The Braiins Manager Agent 4.12.0 release adds remote management of BOS+ advanced settings, makes the agent noticeably more resilient when processing large command batches (e.g. ramp-up after curtailment)
+
+### New
+- Advanced settings management — the agent now reads the advanced settings of your Braiins OS miners and reports them to Braiins Manager, and you can apply advanced settings changes remotely, directly from Braiins Manager.
+
+### Improved
+- Faster recovery after curtailment — duplicate commands are now filtered out before processing, so large command batches (such as resuming a whole site after curtailment) no longer pile up and delay ramp-up.
+- Command timeouts — a stuck command can no longer block the agent indefinitely; an optional execution timeout can be configured.
+- Firmware installations — Braiins OS+ installations on unsupported old Antminer firmware are now rejected up front with a clear error instead of failing midway.
+- License application — applying a license no longer hangs indefinitely on network issues, and error messages are clearer.
+
+### Fixed
+- MARA firmware: outlet temperature is now read from the correct sensor, fixing the mismatch between the Workers List and Worker Details.
+- Antminer: improved handling of malformed responses from the miner API, preventing missing telemetry on some devices.
+
+For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
+
 ## [4.11.1-5] - 2026-07-29
 
 Design polish on the setup page: standard text style in the input fields, button press feedback, corrected spacing and status colors per the Braiins design system.

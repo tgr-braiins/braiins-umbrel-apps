@@ -8,7 +8,7 @@ services:
 
   web:
     # TODO: move to a Braiins-owned registry before official-store submission
-    image: ghcr.io/tgr-braiins/braiins-manager-agent:4.11.1-5@sha256:b069ad18c1ac60b8dbb078305e773f93e0b5075ef90831b617b92ca50a148f37
+    image: ghcr.io/tgr-braiins/braiins-manager-agent:4.12.0@sha256:79b6f5a02774f898d8f647cf115c06f704c379aeaaf6bf6f871259b580cc0eee
     user: "1000:1000"
     init: true
     restart: on-failure
@@ -17,6 +17,6 @@ services:
       # Shown in the app's web UI footer. Kept in sync with the manifest
       # `version` by bump.py (the agent daemon's own version is read from the
       # binary and is independent of this wrapper version).
-      APP_VERSION: "4.11.1-5"
+      APP_VERSION: "4.12.0"
     volumes:
       - ${APP_DATA_DIR}/data:/data
