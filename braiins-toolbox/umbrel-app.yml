@@ -2,7 +2,7 @@ manifestVersion: 1
 id: braiins-toolbox
 category: bitcoin
 name: Braiins Toolbox
-version: "26.06"
+version: "26.08.1"
 tagline: Scan, monitor, and batch-manage your ASIC miners
 description: >-
   Braiins Toolbox is Braiins' tool for managing ASIC miners at scale, running
@@ -19,7 +19,13 @@ description: >-
   To get started, open the app and scan your miners' IP range from the Device
   List. Monitoring is read-only; management actions are always explicit —
   nothing is changed on your miners unless you trigger it.
-releaseNotes: ""
+releaseNotes: |-
+  Braiins Toolbox 26.08.1 is a bugfix release addressing a GUI crash when acting on a large number of selected miners, a CLI panic during narrow-range scans, and a macOS self-update failure.
+
+  ## Bug fixes
+  - Fixed a GUI error ("Cannot convert [object Set] to a BigInt") when using "Select all" on a large, filtered device list, which blocked bulk actions like Advanced Settings, Run a Command, and installing Braiins OS.
+  - Fixed a CLI panic when scanning a narrow IP range.
+  - Fixed a macOS self-update failure ("Permission denied") that could leave the GUI stuck at 100% or fail in the CLI when the installed app was owned by another user (e.g. an MDM-deployed install). The updater now asks for admin privileges to replace the app if needed.
 
 developer: Braiins
 website: https://braiins.com/toolbox
