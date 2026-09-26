@@ -13,6 +13,23 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.13.0] - 2026-09-26
+
+The Braiins Manager Agent 4.13.0 release adds automatic firmware correction, support new models and improves reliability.
+
+### New
+- Automatic firmware type correction - firmware type change required manual intervention on UI otherwise it was delayed until next scan Now we try to detect changes during data polling, so it should be corrected sooner.
+- Support for Antminer Z15, Z15j (320ksol), Z15 Pro (860ksol) models.
+
+### Improved
+- Automatically re-detect miner when it stops providing valid data (e.g. it was reflashed outside of Braiins Manager).
+- Faster delivery of data for small/mid-size farms (improved batching)
+
+### Fixed
+- Antminer: improved handling of malformed responses from the miner API, preventing missing telemetry on some devices.
+
+For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
+
 ## [4.11.1-5] - 2026-07-29
 
 Design polish on the setup page: standard text style in the input fields, button press feedback, corrected spacing and status colors per the Braiins design system.
