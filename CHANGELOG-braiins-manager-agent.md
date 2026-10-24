@@ -13,6 +13,24 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.13.1] - 2026-10-24
+
+The Braiins Manager Agent **4.13.1** release fixes Antminer L7 miners showing as offline, detects reflashed MARA FW miners, and improves reliability of data from Antminer and WhatsMiner devices.
+
+### Improved
+- Miners the agent cannot poll (unrecognized firmware or a miner type mismatch) now report an error instead of sending empty data.
+- Collecting agent logs for support now works on busy agents, where the archive was too large to upload. The oldest log files are left out until it fits.
+- MARA FW: pausing a miner that is already paused, or resuming one that is already running, no longer shows as a failed command.
+
+### Fixed
+- Antminer L7 miners were shown as offline after the 4.13.0 update.
+- Miners reflashed from MARA FW to stock firmware or Braiins OS were no longer monitored. The firmware change is now detected.
+- Antminer: missing telemetry or failed network configuration on miners that report an empty hostname or MAC address, unusual fan values, or a custom firmware stats format.
+- WhatsMiner: missing hashrate, power and temperatures on miners in a non-standard power mode, and missing hashboard data on some newer firmwares.
+- Linux: the GUI now exits with an error message when started without a display, instead of crashing.
+
+For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
+
 ## [4.11.1-5] - 2026-07-29
 
 Design polish on the setup page: standard text style in the input fields, button press feedback, corrected spacing and status colors per the Braiins design system.
