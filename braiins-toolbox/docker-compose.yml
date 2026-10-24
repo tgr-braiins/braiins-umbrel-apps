@@ -8,7 +8,7 @@ services:
 
   web:
     # TODO: move to a Braiins-owned registry before official-store submission
-    image: ghcr.io/tgr-braiins/braiins-toolbox:26.06@sha256:be661eca7308f6f890b2395aae826604724a89f321ee8e2521d9901eb69bb63b
+    image: ghcr.io/tgr-braiins/braiins-toolbox:26.09@sha256:103f08c01555372c327e2af461efaf6e69c820a9b4b3f7eb74a858de276bef93
     user: "1000:1000"
     init: true
     restart: on-failure
