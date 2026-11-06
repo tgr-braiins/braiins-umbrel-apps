@@ -13,6 +13,25 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.14.0] - 2026-11-06
+
+The Braiins Manager Agent **4.14.0** release adds faster miner scans run by the agent, reads managed network switches, and several improvements.
+
+### New
+- The agent reads Cisco Catalyst managed switches over SNMP, so Braiins Manager can show the switch port of each miner.
+
+### Improved
+- Collect Device Logs on stock Antminers shows a clear reason when it fails, for example rejected web credentials.
+- Collect Device Logs now works on stock Antminer firmware without SSH. The agent downloads the logs through the miner web interface.
+- A command whose miner did not answer during detection now says that the miner did not get the command.
+
+### Fixed
+- After the computer that runs the agent wakes from sleep, the agent no longer sends a burst of requests to Braiins Manager.
+- After the computer wakes from sleep, the agent GUI no longer opens a series of error dialogs.
+- Antminer S21 series with stock AML firmware: missing miners stats when the miner reported a damaged hashboard entry.
+
+For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
+
 ## [4.11.1-5] - 2026-07-29
 
 Design polish on the setup page: standard text style in the input fields, button press feedback, corrected spacing and status colors per the Braiins design system.
