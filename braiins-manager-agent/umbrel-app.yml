@@ -2,7 +2,7 @@ manifestVersion: 1.1
 id: braiins-manager-agent
 category: bitcoin
 name: Braiins Manager Agent
-version: "4.11.1-5"
+version: "4.14.0"
 tagline: Connect the miners on your local network to Braiins Manager
 description: >-
   Braiins Manager Agent connects mining devices on your local network to
@@ -16,7 +16,24 @@ description: >-
   Braiins Manager to obtain an Agent ID and Secret key, then paste them into
   this app's settings page.
 releaseNotes: |-
-  Design polish on the setup page: standard text style in the input fields, button press feedback, corrected spacing and status colors per the Braiins design system.
+  The Braiins Manager Agent **4.14.0** release adds faster miner scans run by the agent, reads managed network switches, and several improvements.
+
+  ### New
+  - The agent reads Cisco Catalyst managed switches over SNMP, so Braiins Manager can show the switch port of each miner.
+
+  ### Improved
+  - Collect Device Logs on stock Antminers shows a clear reason when it fails, for example rejected web credentials.
+  - Collect Device Logs now works on stock Antminer firmware without SSH. The agent downloads the logs through the miner web interface.
+  - A command whose miner did not answer during detection now says that the miner did not get the command.
+
+  ### Fixed
+  - After the computer that runs the agent wakes from sleep, the agent no longer sends a burst of requests to Braiins Manager.
+  - After the computer wakes from sleep, the agent GUI no longer opens a series of error dialogs.
+  - Antminer S21 series with stock AML firmware: missing miners stats when the miner reported a damaged hashboard entry.
+  &nbsp;
+  &nbsp;
+
+  For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
 
 developer: Braiins
 website: https://braiins.com/manager
