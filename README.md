@@ -139,8 +139,7 @@ docker buildx build \
 ```
 
 Use the upstream agent version from `umbrel-app.yml` as the tag (e.g. `4.10.0`), then pin the index digest in `docker-compose.yml`.
-`image-braiins-manager-agent/.gitlab-ci.yml` automates exactly this; wire it into CI when the repo
-finds its final home.
+The GitHub workflows in `.github/workflows/` automate exactly this (see "Release flow").
 
 ### Test on a real Umbrel
 
@@ -171,12 +170,15 @@ Automated: `.github/workflows/agent-update.yml` polls the release feed daily
 and opens a ready-made bump PR (image built, smoke-tested, pushed, digest
 pinned) — a maintainer reviews and merges. It performs exactly the manual
 steps below; the manual flow remains the fallback and the source of truth.
+If several upstream versions ship before a bump PR is merged, the newest bump
+PR closes the older ones and its changelog carries an entry for every skipped
+version (dated with the feed's release date), so merging only the newest PR
+loses nothing.
 
 1. New agent version is published to the public download feed.
 2. Bump `BMA_VERSION` and the per-arch `.deb` checksums in `image-braiins-manager-agent/Dockerfile`.
 3. Build + push the multi-arch image, tagged with the upstream agent version:
    `docker buildx build --platform linux/amd64,linux/arm64 --tag <registry>/braiins-manager-agent:<X.Y.Z> --push image-braiins-manager-agent/`
-   (`image-braiins-manager-agent/.gitlab-ci.yml` is a reference pipeline for automating this).
 4. Pin the **multi-arch index digest** in `docker-compose.yml`
    (`tag@sha256:…` — get it from `docker buildx imagetools inspect <image>:<tag>`),
    bump `version` in `umbrel-app.yml`, push this repo.

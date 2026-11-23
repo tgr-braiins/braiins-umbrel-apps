@@ -13,7 +13,7 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
-## [4.14.0] - 2026-11-22
+## [4.14.0] - 2026-11-04
 
 The Braiins Manager Agent **4.14.0** release adds faster miner scans run by the agent, reads managed network switches, and several improvements.
 
@@ -29,6 +29,60 @@ The Braiins Manager Agent **4.14.0** release adds faster miner scans run by the 
 - After the computer that runs the agent wakes from sleep, the agent no longer sends a burst of requests to Braiins Manager.
 - After the computer wakes from sleep, the agent GUI no longer opens a series of error dialogs.
 - Antminer S21 series with stock AML firmware: missing miners stats when the miner reported a damaged hashboard entry.
+
+For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
+
+## [4.13.1] - 2026-10-21
+
+The Braiins Manager Agent **4.13.1** release fixes Antminer L7 miners showing as offline, detects reflashed MARA FW miners, and improves reliability of data from Antminer and WhatsMiner devices.
+
+### Improved
+- Miners the agent cannot poll (unrecognized firmware or a miner type mismatch) now report an error instead of sending empty data.
+- Collecting agent logs for support now works on busy agents, where the archive was too large to upload. The oldest log files are left out until it fits.
+- MARA FW: pausing a miner that is already paused, or resuming one that is already running, no longer shows as a failed command.
+
+### Fixed
+- Antminer L7 miners were shown as offline after the 4.13.0 update.
+- Miners reflashed from MARA FW to stock firmware or Braiins OS were no longer monitored. The firmware change is now detected.
+- Antminer: missing telemetry or failed network configuration on miners that report an empty hostname or MAC address, unusual fan values, or a custom firmware stats format.
+- WhatsMiner: missing hashrate, power and temperatures on miners in a non-standard power mode, and missing hashboard data on some newer firmwares.
+- Linux: the GUI now exits with an error message when started without a display, instead of crashing.
+
+For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
+
+## [4.13.0] - 2026-09-17
+
+The Braiins Manager Agent 4.13.0 release adds automatic firmware correction, support new models and improves reliability.
+
+### New
+- Automatic firmware type correction - firmware type change required manual intervention on UI otherwise it was delayed until next scan Now we try to detect changes during data polling, so it should be corrected sooner.
+- Support for Antminer Z15, Z15j (320ksol), Z15 Pro (860ksol) models.
+
+### Improved
+- Automatically re-detect miner when it stops providing valid data (e.g. it was reflashed outside of Braiins Manager).
+- Faster delivery of data for small/mid-size farms (improved batching)
+
+### Fixed
+- Antminer: improved handling of malformed responses from the miner API, preventing missing telemetry on some devices.
+
+For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
+
+## [4.12.0] - 2026-08-17
+
+The Braiins Manager Agent 4.12.0 release adds remote management of BOS+ advanced settings, makes the agent noticeably more resilient when processing large command batches (e.g. ramp-up after curtailment)
+
+### New
+- Advanced settings management — the agent now reads the advanced settings of your Braiins OS miners and reports them to Braiins Manager, and you can apply advanced settings changes remotely, directly from Braiins Manager.
+
+### Improved
+- Faster recovery after curtailment — duplicate commands are now filtered out before processing, so large command batches (such as resuming a whole site after curtailment) no longer pile up and delay ramp-up.
+- Command timeouts — a stuck command can no longer block the agent indefinitely; an optional execution timeout can be configured.
+- Firmware installations — Braiins OS+ installations on unsupported old Antminer firmware are now rejected up front with a clear error instead of failing midway.
+- License application — applying a license no longer hangs indefinitely on network issues, and error messages are clearer.
+
+### Fixed
+- MARA firmware: outlet temperature is now read from the correct sensor, fixing the mismatch between the Workers List and Worker Details.
+- Antminer: improved handling of malformed responses from the miner API, preventing missing telemetry on some devices.
 
 For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
 

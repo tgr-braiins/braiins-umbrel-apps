@@ -94,6 +94,8 @@ def rpc(method, params=()):
 # Guarded by LOCK; the sync thread is the only writer.
 
 LOCK = threading.Lock()
+STALE_AFTER = 300  # s without a successful poll before the page says so
+
 STATE = {
     "chain": None,
     "boundaries": [],       # [(height, time, difficulty), ...]
@@ -157,6 +159,8 @@ def sync_loop():
                 chain, boundaries, fees = ci["chain"], [], {}
             tip_height = ci["blocks"]
             want = tip_height // EPOCH_BLOCKS + 1  # boundaries 0..want-1
+            if len(boundaries) > want:  # node now on a shorter chain
+                del boundaries[want:]
             while len(boundaries) < want:
                 h = len(boundaries) * EPOCH_BLOCKS
                 hdr = rpc("getblockheader", [rpc("getblockhash", [h])])
@@ -177,9 +181,13 @@ def sync_loop():
                              ibd=ci.get("initialblockdownload", False),
                              verification=ci.get("verificationprogress", 1.0),
                              backfill=None, fees=dict(fees))
-        except (RpcError, KeyError, ValueError) as e:
+        except Exception as e:  # noqa: BLE001 — any failure must not end the loop
+            # RpcError/KeyError/ValueError are the expected ones; anything else
+            # (e.g. http.client.IncompleteRead, which is not an OSError) used to
+            # kill this thread silently, leaving the page "ok" on stale data.
+            msg = str(e) if isinstance(e, RpcError) else "%s: %s" % (type(e).__name__, e)
             with LOCK:
-                STATE["error"] = str(e)
+                STATE["error"] = msg
         time.sleep(10 if STATE["error"] else 30)
 
 
@@ -267,6 +275,9 @@ def build_summary(state, rows):
         status, message = "waiting", "Waiting for the Bitcoin node"
     elif state["error"]:
         status, message = "error", state["error"]
+    elif state["updated"] and time.time() - state["updated"] > STALE_AFTER:
+        status = "error"
+        message = "No update from the Bitcoin node for %d min" % ((time.time() - state["updated"]) // 60)
     elif state["backfill"]:
         status = "backfill"
         message = "Reading epoch history %d/%d" % state["backfill"]
