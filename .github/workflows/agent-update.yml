@@ -116,3 +116,18 @@ jobs:
             - [ ] CHANGELOG-braiins-manager-agent.md entry reads sanely
             - [ ] update an Umbrel from this branch's store and verify the agent reconnects
           delete-branch: true
+
+      # Only the newest bump PR is worth merging (bump.py writes changelog
+      # entries for every skipped version), so close the ones it supersedes.
+      - name: Close superseded bump PRs
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEP: agent-update/${{ steps.bump.outputs.version }}
+        run: |
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("agent-update/")) | select(.headRefName != env.KEEP) | .number' |
+          while read -r n; do
+            gh pr close "$n" --repo "$GITHUB_REPOSITORY" --delete-branch \
+              --comment "Superseded by the ${{ steps.bump.outputs.version }} bump PR."
+          done

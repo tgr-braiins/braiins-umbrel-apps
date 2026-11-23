@@ -127,13 +127,16 @@ def parse_version(app, v):
     return core + pre
 
 
-def latest_release(app):
+def newer_releases(app, cur):
+    """Feed releases newer than `cur`, oldest first."""
     # the CDN rejects urllib's default User-Agent
     req = urllib.request.Request(app["feed"], headers={"User-Agent": "braiins-umbrel-update-check"})
     with urllib.request.urlopen(req, timeout=30) as r:
         feed = json.load(r)
     key = app["feed_version_key"]
-    return max(feed["releases"], key=lambda rel: parse_version(app, rel["metadata"][key]))
+    rels = [rel for rel in feed["releases"]
+            if parse_version(app, rel["metadata"][key]) > parse_version(app, cur)]
+    return sorted(rels, key=lambda rel: parse_version(app, rel["metadata"][key]))
 
 
 def current_version(app):
@@ -141,7 +144,7 @@ def current_version(app):
     return m.group(1)
 
 
-def prepend_changelog(app, version, desc):
+def prepend_changelog(app, version, desc, date=None):
     """Insert a `## [version] - date` section right below the marker, unless
     one already exists for this version. Body is the feed description with
     Umbrel's `&nbsp;` spacer lines dropped and blank runs collapsed, so it
@@ -156,8 +159,8 @@ def prepend_changelog(app, version, desc):
 
     body_lines = [ln for ln in desc.splitlines() if ln.strip().lower() != "&nbsp;"]
     body = re.sub(r"\n{3,}", "\n\n", "\n".join(body_lines)).strip()
-    today = datetime.date.today().isoformat()
-    entry = f"\n\n## [{version}] - {today}\n\n{body}"
+    date = date or datetime.date.today().isoformat()
+    entry = f"\n\n## [{version}] - {date}\n\n{body}"
 
     if marker in text:
         text = text.replace(marker, marker + entry, 1)
@@ -166,7 +169,7 @@ def prepend_changelog(app, version, desc):
     changelog.write_text(text)
 
 
-def write_manifest_release(app, version, desc):
+def write_manifest_release(app, version, desc, date=None):
     """Set the manifest `version` and `releaseNotes` block, and prepend a
     matching changelog entry. Shared by `check` (feed-driven) and `release`
     (wrapper-only)."""
@@ -177,18 +180,18 @@ def write_manifest_release(app, version, desc):
     block = "\n".join(("  " + line).rstrip() for line in desc.splitlines())
     t = re.sub(r"releaseNotes: .*?\n\ndeveloper:", f"releaseNotes: |-\n{block}\n\ndeveloper:", t, count=1, flags=re.S)
     manifest.write_text(t)
-    prepend_changelog(app, version, desc)
+    prepend_changelog(app, version, desc, date)
 
 
 def check(app):
-    rel = latest_release(app)
-    meta = rel["metadata"]
-    new = meta[app["feed_version_key"]]
     cur = current_version(app)
-    if parse_version(app, new) <= parse_version(app, cur):
+    rels = newer_releases(app, cur)
+    if not rels:
         out("changed", "false")
         out("version", cur)
         return
+    meta = rels[-1]["metadata"]
+    new = meta[app["feed_version_key"]]
 
     assets = meta["assets"]
     missing = [a for a in ("linux_x86_64", "linux_aarch64") if not assets.get(a)]
@@ -202,7 +205,13 @@ def check(app):
     t = re.sub(r"ARG SHA256_ARM64=.*", f"ARG SHA256_ARM64={assets['linux_aarch64']['integrity']['checksum']}", t)
     dockerfile.write_text(t)
 
-    write_manifest_release(app, new, meta.get("description", ""))
+    # Versions skipped since the last merged bump (bump PRs left unmerged while
+    # upstream moved on) still get their own changelog entry, oldest first so
+    # the newest ends up on top; the manifest releaseNotes show only `new`.
+    for rel in rels[:-1]:
+        m = rel["metadata"]
+        prepend_changelog(app, m[app["feed_version_key"]], m.get("description", ""), m.get("release_date"))
+    write_manifest_release(app, new, meta.get("description", ""), meta.get("release_date"))
 
     out("changed", "true")
     out("version", new)

@@ -16,12 +16,14 @@ if [ ! -f "$CONFIG" ] && [ -n "${AGENT_ID:-}" ] && [ -n "${SECRET_KEY:-}" ]; the
 fi
 
 python3 /usr/lib/bma/webui.py &
+WEBUI_PID=$!
 
 DAEMON_PID=""
 CONFIG_MTIME=""
 
 term() {
     [ -n "$DAEMON_PID" ] && kill "$DAEMON_PID" 2>/dev/null || true
+    kill "$WEBUI_PID" 2>/dev/null || true
     exit 0
 }
 trap term TERM INT
@@ -31,8 +33,15 @@ while true; do
     if [ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -gt 52428800 ]; then
         : > "$LOG"
     fi
+    # the config UI is the only way to (re)configure the agent: keep it up
+    if ! kill -0 "$WEBUI_PID" 2>/dev/null; then
+        python3 /usr/lib/bma/webui.py &
+        WEBUI_PID=$!
+    fi
     if [ -f "$CONFIG" ]; then
-        MTIME=$(stat -c %Y "$CONFIG")
+        # inode + mtime: webui.py replaces the file atomically (new inode), so
+        # two saves within the same second still count as a change
+        MTIME=$(stat -c '%i %Y' "$CONFIG" 2>/dev/null || echo gone)
         if [ -z "$DAEMON_PID" ] || ! kill -0 "$DAEMON_PID" 2>/dev/null; then
             /usr/bin/bma-daemon -c "$CONFIG" &
             DAEMON_PID=$!

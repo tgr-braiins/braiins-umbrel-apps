@@ -1,4 +1,4 @@
-FROM alpine:3.21 AS fetch
+FROM alpine:3.24 AS fetch
 
 ARG TARGETARCH=amd64
 ARG BMA_VERSION=4.14.0
@@ -19,7 +19,7 @@ RUN set -eu; \
     install -m 0755 /tmp/bma/usr/bin/bma-daemon /bma-daemon
 
 # bma-daemon is statically linked; the base only exists to run webui.py
-FROM alpine:3.21
+FROM alpine:3.24
 
 RUN apk add --no-cache ca-certificates python3
 

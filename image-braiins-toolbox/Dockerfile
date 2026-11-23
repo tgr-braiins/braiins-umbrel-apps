@@ -1,4 +1,4 @@
-FROM alpine:3.21 AS fetch
+FROM alpine:3.24 AS fetch
 
 ARG TARGETARCH=amd64
 ARG TOOLBOX_VERSION=26.09
@@ -20,7 +20,7 @@ RUN set -eu; \
 
 # braiins-toolbox is statically linked (static-pie); ca-certificates is for its
 # outbound HTTPS (BOS firmware downloads during installs, release feed checks)
-FROM alpine:3.21
+FROM alpine:3.24
 
 RUN apk add --no-cache ca-certificates \
     && mkdir -p /data && chown 1000:1000 /data
