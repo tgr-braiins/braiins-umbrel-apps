@@ -8,6 +8,10 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.13.1] - 2026-11-23
+
+Maintenance release: rebuilt on Alpine 3.24. The app no longer stops updating after an unexpected reply from the Bitcoin node, and it now shows an error when the data has not been refreshed for 5 minutes instead of staying on stale numbers.
+
 ## [1.13.0] - 2026-08-10
 
 Removes the Signalling page — the app now focuses on difficulty only. Gone with it: the `/api/signalling` endpoint, the block-header version collector (fewer node RPC calls, smaller cache), and the `SIGNAL_BIT` setting. No difficulty features are affected.
