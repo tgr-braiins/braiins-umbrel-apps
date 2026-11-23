@@ -15,6 +15,10 @@ workflows.
 
 <!-- new entries are inserted directly below this line -->
 
+## [26.09-1] - 2026-11-23
+
+Maintenance release of the Umbrel package (Braiins Toolbox 26.09 unchanged): rebuilt on Alpine 3.24.
+
 ## [26.09] - 2026-09-14
 
 Braiins **Toolbox 26.09** adds automatic refreshing of the device list, alongside device-list and command-line fixes.
