@@ -13,6 +13,10 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.14.1-1] - 2026-11-23
+
+Maintenance release of the Umbrel package (Braiins Manager Agent 4.14.0 unchanged): rebuilt on Alpine 3.24. The settings page now restarts by itself if it ever stops, and saving new credentials twice in quick succession reliably restarts the agent with the last ones.
+
 ## [4.14.0] - 2026-11-04
 
 The Braiins Manager Agent **4.14.0** release adds faster miner scans run by the agent, reads managed network switches, and several improvements.
