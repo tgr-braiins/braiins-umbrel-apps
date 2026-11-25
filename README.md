@@ -138,7 +138,14 @@ install fail. The GHCR packages must stay public.
 
 ### Build and test locally
 
-Example with the Manager Agent; the others work the same way.
+Unit tests cover `bump.py`, the agent setup page and Bitcoin Data. They use
+only the Python standard library and need no Docker and no node:
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+To try an image, for example the Manager Agent (the others work the same way):
 
 ```bash
 cd image-braiins-manager-agent

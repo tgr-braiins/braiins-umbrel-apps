@@ -19,6 +19,16 @@ store id (`app-repository.ts`: `app.id.startsWith(meta.id)`; our store id is
 UI, and nothing is logged. Bitcoin Data 1.0.0 first shipped as `bitcoin-data`
 and hit exactly this. Display names are free ("Bitcoin Data").
 
+## `ARG TARGETARCH` never gets a default
+
+The agent and Toolbox Dockerfiles pick the release file for the platform from
+`TARGETARCH`, which BuildKit sets for each platform of a multi-arch build.
+Until November 2026 both declared `ARG TARGETARCH=amd64`, and that default won:
+the published arm64 images contained the x86-64 binary and could not start on
+an arm64 Umbrel. Nothing caught it because arm64 was built but never run. Now
+CI runs every image on a native arm64 runner, and a unit test refuses a
+default on any platform `ARG`.
+
 ## Official artifacts only, never source or patches
 
 The agent and Toolbox images download the official signed release files from
@@ -177,9 +187,11 @@ which has been requested. Replace the parsing as soon as it exists.
 
 The daemon writes `/var/log/bma.log` (the path is hardcoded). It is a real
 file so the page can parse it; `tail -F` mirrors it to `docker logs`, and the
-entrypoint loop truncates it at 50 MB (there is no logrotate in the
-container). The file is created in the image and owned by uid 1000, because
-`/var/log` itself isn't writable for an unprivileged user.
+entrypoint loop truncates it at 50 MB as a last resort. The daemon also
+rotates the log itself (it embeds the `file-rotate` crate), which renames
+files next to the log, so the image makes both the file and `/var/log` owned
+by uid 1000. Without the directory, rotation would fail once the daemon's size
+limit is reached.
 
 ## The entrypoint is a supervisor loop, not just `exec`
 
@@ -190,15 +202,30 @@ config's modification time every 5 s and starts or restarts `bma-daemon` when
 it changes. It also restarts the setup page if that stops. `init: true` in
 compose handles signals as PID 1 above it.
 
+On `docker stop`, the script signals the daemon and **waits** for it before
+exiting. Under `init: true` this shell is the container's main process: once
+it exits, everything left in the container is killed at once, which used to
+cut the daemon's shutdown short. The loop sleeps with `sleep 5 & wait`, so the
+signal is handled immediately rather than after the sleep.
+
 ## Credentials: plaintext YAML, mode 0600, included in backups
 
 `/data/daemon.yaml` mirrors the stock `.deb`'s `/etc/braiins-manager-agent/`
 config: the same two keys and the same trust model. Umbrel has no secret store
 for apps. The file is mode 0600, owned by uid 1000, and written atomically.
 It is deliberately NOT in `backupIgnore`: restoring a backup should bring the
-agent back paired. Risk on the shared network: another app could replace the
-credentials through `web:8080`. Candidate fix: require the current Secret key
-to overwrite an existing config.
+agent back paired.
+
+Whoever sets these credentials decides whose Braiins Manager the miners
+report to, so a save is accepted only from the setup page itself. The page's
+`fetch` sends an `X-BMA-Setup: 1` header: a plain HTML form can't send a custom
+header, and a script on another site would need a CORS preflight, which the
+server never grants. Requests whose `Sec-Fetch-Site` is not `same-origin` are
+refused too; that includes another Umbrel app's page on a different port. The
+check doesn't depend on `Host` or `Origin`, which app_proxy may rewrite.
+Remaining risk: another *container* on the shared network can still call
+`web:8080` directly (see "Web pages without login" above). Candidate fix:
+require the current Secret key to overwrite an existing config.
 
 ## Version scheme: upstream version; packaging releases use the next patch
 
@@ -309,6 +336,30 @@ without a successful poll instead of keeping "ok" next to old data. If the
 node is on a shorter chain than the cache (for example after a reindex), the
 epochs above the node's tip are dropped.
 
+The cache is treated the same way. A cache that is malformed in any way (a
+hand edit, a format from another version) gives an empty start instead of
+killing the sync, and a failed save (a full disk, a read-only `/data`) is
+only logged, so live updates go on. The HTTP handler drops a client that
+stays idle for 15 s, because any container on the network can open
+connections.
+
+## The first blocks of an epoch use the previous epoch
+
+Until 10 blocks into an epoch (`MIN_SAMPLE`), its own average says almost
+nothing: one block 5 s after the retarget meant a hundred times the real
+hashrate and a halving "in 7 days", and block times may even run backwards.
+So for those blocks the page shows the previous epoch's hashrate, uses the
+600 s target for the retarget and halving dates, and shows no projected
+change.
+
+## Fees are read newest block first
+
+Fees come from `getblockstats` for the current epoch only. A pruned node
+(the default keeps about 288 blocks) has deleted the oldest blocks of the
+epoch, and the loop stops at the first block it can't read. Reading from the
+tip down means it stops below the blocks the node still has, and the fee
+average uses those.
+
 ## One header per epoch, JSON cache, no database
 
 Difficulty only changes at 2016-block retarget boundaries, so the full history
@@ -318,8 +369,10 @@ and rename, saved every 100 headers so a restart resumes). The cache can
 always be rebuilt from the node, so a plain JSON file is enough; losing
 `/data` costs one re-read. A 30 s tip poll adds a boundary at each retarget.
 The projected next adjustment uses the current epoch's average block interval,
-clamped to the consensus ×4/÷4 bounds: the standard estimate, matching public
-explorers.
+clamped to the consensus ×4/÷4 bounds. Consensus compares the time of the
+epoch's 2015 intervals (first to last block) with 2016 target intervals, so
+the projection includes the factor 2016/2015: an epoch at exactly 600 s per
+block raises difficulty by 0.05%.
 
 ## Chart colors are validated, not eyeballed
 
