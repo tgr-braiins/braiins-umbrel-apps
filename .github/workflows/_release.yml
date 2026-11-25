@@ -1,0 +1,259 @@
+# The release pipeline shared by every app, called by the five small
+# workflows next to it. It opens a PR; a maintainer merges it, so nothing
+# reaches users without a human click.
+#
+#   prepare  read-only     bump.py check (feed) or release (manual) edits the
+#                          files; the feed is untrusted, so this job can't
+#                          write anything. The edits go on as a patch.
+#   image    packages      build, smoke-test, push, smoke-test the pushed
+#                          digest. The digest comes from the build itself.
+#   pr       contents/PRs  pin the digest, open the PR, close superseded bump
+#                          PRs, start CI on the PR branch.
+#
+# Callers set `concurrency: release-<app>` so two runs for one app (daily
+# check and a manual release) never overlap.
+
+name: _release
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: "bump.py app key: agent, toolbox or braiins-bitcoin-data"
+        type: string
+        required: true
+      app_id:
+        description: "Umbrel app id; also the image name and the image-<app_id>/ folder"
+        type: string
+        required: true
+      display:
+        type: string
+        required: true
+      mode:
+        description: "check = new upstream version from the feed; release = manual packaging release"
+        type: string
+        required: true
+      version:
+        description: "release mode: the new version, or empty to re-pin the digest at the current version"
+        type: string
+        default: ""
+      notes:
+        type: string
+        default: ""
+      branch_prefix:
+        type: string
+        required: true
+      title_prefix:
+        description: "PR and commit title before the version"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      changed: ${{ steps.done.outputs.changed }}
+      version: ${{ steps.done.outputs.version }}
+      bumped: ${{ steps.done.outputs.bumped }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Check the feed
+        id: check
+        if: inputs.mode == 'check'
+        env:
+          APP: ${{ inputs.app }}
+        run: python3 .github/scripts/bump.py check --app "$APP"
+
+      - name: Bump for a manual release
+        id: release
+        if: inputs.mode == 'release'
+        env:
+          APP: ${{ inputs.app }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_NOTES: ${{ inputs.notes }}
+        run: |
+          set -eu
+          if [ -n "$IN_VERSION" ]; then
+            printf '%s' "$IN_NOTES" > "$RUNNER_TEMP/notes.md"
+            # writes version=<v>; fails unless it sorts above the current one
+            python3 .github/scripts/bump.py release --app "$APP" --version "$IN_VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(python3 .github/scripts/bump.py current-version --app "$APP")" >> "$GITHUB_OUTPUT"
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide
+        id: done
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          CHECK_CHANGED: ${{ steps.check.outputs.changed }}
+          CHECK_VERSION: ${{ steps.check.outputs.version }}
+          REL_VERSION: ${{ steps.release.outputs.version }}
+          REL_BUMPED: ${{ steps.release.outputs.bumped }}
+          PREFIX: ${{ inputs.branch_prefix }}
+        run: |
+          set -eu
+          if [ "$MODE" = check ]; then
+            changed=$CHECK_CHANGED version=$CHECK_VERSION bumped=true
+            # A bump PR for this version is already open: don't rebuild it
+            # every night, or the image a reviewer tested changes under them.
+            if [ "$changed" = true ] && [ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --head "$PREFIX/$version" --json number --jq '.[].number')" ]; then
+              echo "A PR for $PREFIX/$version is already open; nothing to do."
+              changed=false
+            fi
+          else
+            changed=true version=$REL_VERSION bumped=$REL_BUMPED
+          fi
+          { echo "changed=$changed"; echo "version=$version"; echo "bumped=$bumped"; } >> "$GITHUB_OUTPUT"
+          git diff --binary > "$RUNNER_TEMP/changes.patch"
+          git diff --stat
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.done.outputs.changed == 'true'
+        with:
+          name: changes
+          path: ${{ runner.temp }}/changes.patch
+          retention-days: 7
+
+  image:
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/${{ inputs.app_id }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      DIR: image-${{ inputs.app_id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: changes
+          path: ${{ runner.temp }}
+      - name: Apply the prepared changes
+        run: if [ -s "$RUNNER_TEMP/changes.patch" ]; then git apply "$RUNNER_TEMP/changes.patch"; fi
+
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # Before anything is published: a broken build never gets the tag.
+      - name: Build amd64 and smoke-test it
+        run: |
+          docker buildx build --platform linux/amd64 --provenance=false --load --tag smoke:local "$DIR/"
+          sh "$DIR/smoke.sh" smoke:local
+
+      - name: Build and push the multi-arch image
+        id: push
+        run: |
+          set -eu
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --provenance=false \
+            --metadata-file "$RUNNER_TEMP/meta.json" \
+            --tag "$IMAGE:$VERSION" \
+            --push "$DIR/"
+          # the index digest of exactly this build, not whatever the tag
+          # points to by now
+          digest=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["containerimage.digest"])' "$RUNNER_TEMP/meta.json")
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "pushed $IMAGE:$VERSION@$digest"
+
+      # The digest the PR pins is the one tested here (amd64, pulled back).
+      # The arm64 image runs natively in CI on the PR.
+      - name: Smoke-test the pushed digest
+        run: |
+          docker pull --platform linux/amd64 "$IMAGE@${{ steps.push.outputs.digest }}"
+          sh "$DIR/smoke.sh" "$IMAGE@${{ steps.push.outputs.digest }}"
+
+  pr:
+    needs: [prepare, image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    env:
+      APP: ${{ inputs.app }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      DIGEST: ${{ needs.image.outputs.digest }}
+      BRANCH: ${{ inputs.branch_prefix }}/${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: changes
+          path: ${{ runner.temp }}
+      - name: Apply the prepared changes and pin the digest
+        run: |
+          set -eu
+          if [ -s "$RUNNER_TEMP/changes.patch" ]; then git apply "$RUNNER_TEMP/changes.patch"; fi
+          python3 .github/scripts/bump.py pin --app "$APP" --version "$VERSION" --digest "$DIGEST"
+
+      - name: Open the PR
+        id: cpr
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
+        with:
+          branch: ${{ env.BRANCH }}
+          commit-message: "${{ inputs.title_prefix }} ${{ needs.prepare.outputs.version }}"
+          title: "${{ inputs.title_prefix }} ${{ needs.prepare.outputs.version }}"
+          delete-branch: true
+          body: |
+            ${{ inputs.mode == 'check' && format('New upstream {0} version from the public release feed.', inputs.display) || format('Manual packaging release of {0}.', inputs.display) }}
+
+            Done by the release workflow:
+            - image built from `image-${{ inputs.app_id }}/` and smoke-tested before publishing
+            - multi-arch image pushed as `ghcr.io/${{ github.repository_owner }}/${{ inputs.app_id }}:${{ needs.prepare.outputs.version }}`
+            - the pushed digest pulled back and smoke-tested, then pinned in `docker-compose.yml`: `${{ needs.image.outputs.digest }}`
+            ${{ needs.prepare.outputs.bumped == 'true' && '- manifest `version` and `releaseNotes` updated and a changelog entry added: existing installs get the Update badge' || '- manifest `version` unchanged (digest-only re-pin): only new installs get this image' }}
+
+            Before merging:
+            - [ ] `ci-ok` passed (CI runs on this branch, including the arm64 image)
+            - [ ] the release notes and changelog entry read well
+            - [ ] for a new upstream major or minor version: tested on a device
+
+      - name: Close superseded bump PRs
+        if: inputs.mode == 'check'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFIX: ${{ inputs.branch_prefix }}
+        run: |
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith(env.PREFIX + "/")) | select(.headRefName != env.BRANCH) | .number' |
+          while read -r n; do
+            gh pr close "$n" --repo "$GITHUB_REPOSITORY" --delete-branch \
+              --comment "Superseded by the $VERSION bump PR."
+          done
+
+      # PRs opened with GITHUB_TOKEN don't start pull_request workflows;
+      # workflow_dispatch is the exception, so start CI on the branch here.
+      - name: Start CI on the PR branch
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"

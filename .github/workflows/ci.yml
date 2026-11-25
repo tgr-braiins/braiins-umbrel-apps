@@ -1,0 +1,95 @@
+# Checks every change before it can be merged: unit tests, an image build and
+# smoke test of every app on amd64 and arm64, and the official Umbrel linter.
+# `ci-ok` is the single required check on main.
+#
+# Bot PRs opened by the release workflows use GITHUB_TOKEN, which doesn't
+# start pull_request workflows, so _release.yml starts this one on the PR
+# branch with workflow_dispatch instead.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Compile
+        run: python3 -m py_compile .github/scripts/*.py image-*/webui.py tests/*.py
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Shell syntax
+        run: for f in image-*/*.sh; do sh -n "$f"; done
+      - name: Lint the workflows
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+  images:
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [braiins-manager-agent, braiins-toolbox, braiins-bitcoin-data]
+        # native runners: the arm64 image is actually run, not just built
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Build
+        run: docker build --tag "smoke:${{ matrix.app }}" "image-${{ matrix.app }}/"
+      - name: Smoke test
+        run: sh "image-${{ matrix.app }}/smoke.sh" "smoke:${{ matrix.app }}"
+
+  umbrel-lint:
+    runs-on: ubuntu-24.04
+    env:
+      # The official linter at a fixed commit, so a new upstream rule can't
+      # break unrelated PRs. Move it forward on purpose (README "Umbrel linter").
+      UMBREL_APPS_REF: f8b4f29714346aeee3c0f5ee3acfeab3cd540d8e
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: getumbrel/umbrel-apps
+          ref: ${{ env.UMBREL_APPS_REF }}
+          path: umbrel-apps
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Lint
+        run: |
+          set -eu
+          apps="braiins-manager-agent braiins-toolbox braiins-bitcoin-data"
+          for app in $apps; do cp -r "$app" umbrel-apps/; done
+          cd umbrel-apps
+          npm ci --no-audit --no-fund
+          node .tools/lint-apps.mjs $apps --check-images --format json > "$RUNNER_TEMP/lint.json" || true
+          python3 ../.github/scripts/umbrel_lint.py "$RUNNER_TEMP/lint.json"
+
+  ci-ok:
+    if: always()
+    needs: [unit, images, umbrel-lint]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: All checks passed
+        run: |
+          [ "${{ needs.unit.result }}" = success ] &&
+          [ "${{ needs.images.result }}" = success ] &&
+          [ "${{ needs.umbrel-lint.result }}" = success ]

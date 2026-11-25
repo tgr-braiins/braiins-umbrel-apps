@@ -1,0 +1,22 @@
+# Keeps the pinned GitHub Actions (by commit SHA) and the Alpine base images
+# current. Each update is a PR that CI checks; merging a base-image update
+# needs a release of the app to reach users (README "Releases").
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directories:
+      - /image-braiins-manager-agent
+      - /image-braiins-toolbox
+      - /image-braiins-bitcoin-data
+    schedule:
+      interval: weekly
+    groups:
+      alpine:
+        patterns: ["alpine"]
