@@ -117,9 +117,9 @@ check must pass before anything merges:
   and fails on any other error. Move `UMBREL_APPS_REF` forward on purpose, in
   its own PR.
 
-Bot PRs from the release workflows are opened with the workflow token, which
-doesn't start `pull_request` workflows, so the release workflow starts CI on
-the PR branch itself.
+On PRs that the release workflows open, GitHub holds CI until a maintainer
+clicks **Approve workflows to run** on the PR. Only that run counts for the
+required `ci-ok` check.
 
 Dependabot (`.github/dependabot.yml`) proposes weekly updates of the GitHub
 Actions, pinned by commit SHA, and of the Alpine base image, pinned by digest.
@@ -137,8 +137,8 @@ release workflows, does the work in three jobs with separate permissions:
    multi-arch image, then pulls the pushed digest back and runs `smoke.sh` on
    it. The digest comes from the build itself, so the PR pins exactly what was
    tested.
-3. **pr** (can open PRs): pins the digest, opens the PR, closes superseded bump
-   PRs and starts CI on the PR branch.
+3. **pr** (can open PRs): pins the digest, opens the PR and closes superseded
+   bump PRs. Approve the held CI run on the PR, then merge once `ci-ok` passes.
 
 A maintainer reviews and merges the PR. Runs for one app never overlap
 (`concurrency: release-<app-id>`), and the daily check does nothing while a

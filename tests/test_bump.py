@@ -98,6 +98,12 @@ class VersionOrder(unittest.TestCase):
 
 
 class Release(RepoCopy):
+    # Far above any real version, so the tests keep passing as the repo's
+    # own versions move on (release refuses anything not above the current).
+    AGENT_NEXT = ("99.0.1-1", "99.0.1-2")
+    TOOLBOX_NEXT = "99.01-1"
+    DATA_NEXT = "99.0.0"
+
     def notes(self, text):
         f = self.tmp / "notes.md"
         f.write_text(text)
@@ -106,24 +112,24 @@ class Release(RepoCopy):
     def test_bitcoin_data_release_notes_reach_the_manifest(self):
         # 1.13.1 shipped with empty notes: `developer:` directly followed
         # `releaseNotes: ""` and the old pattern needed a blank line.
-        self.quiet(bump.release, DATA, "9.0.0", self.notes("Fixed the first blocks of an epoch."))
+        self.quiet(bump.release, DATA, self.DATA_NEXT, self.notes("Fixed the first blocks of an epoch."))
         key, body, nxt = self.release_notes(DATA)
         self.assertEqual(key, "releaseNotes: |-")
         self.assertIn("  Fixed the first blocks of an epoch.", body)
         self.assertEqual(nxt, "developer: Braiins")
-        self.assertIn('version: "9.0.0"', self.read(DATA, "manifest"))
-        self.assertIn("## [9.0.0]", self.read(DATA, "changelog"))
+        self.assertIn('version: "%s"' % self.DATA_NEXT, self.read(DATA, "manifest"))
+        self.assertIn("## [%s]" % self.DATA_NEXT, self.read(DATA, "changelog"))
 
     def test_existing_block_is_replaced_not_appended(self):
-        self.quiet(bump.release, AGENT, "4.15.1-1", self.notes("First."))
-        self.quiet(bump.release, AGENT, "4.15.1-2", self.notes("Second."))
+        self.quiet(bump.release, AGENT, self.AGENT_NEXT[0], self.notes("First."))
+        self.quiet(bump.release, AGENT, self.AGENT_NEXT[1], self.notes("Second."))
         key, body, nxt = self.release_notes(AGENT)
         self.assertEqual([ln for ln in body if ln.strip()], ["  Second."])
         self.assertEqual(nxt, "developer: Braiins")
 
     def test_backslashes_are_kept_literally(self):
         text = "Path C:\\data and a literal \\n stay as typed."
-        self.quiet(bump.release, TOOLBOX, "26.09-2", self.notes(text))
+        self.quiet(bump.release, TOOLBOX, self.TOOLBOX_NEXT, self.notes(text))
         _, body, _ = self.release_notes(TOOLBOX)
         self.assertIn("  " + text, body)
         self.assertIn(text, self.read(TOOLBOX, "changelog"))

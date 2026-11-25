@@ -8,7 +8,8 @@
 #   image    packages      build, smoke-test, push, smoke-test the pushed
 #                          digest. The digest comes from the build itself.
 #   pr       contents/PRs  pin the digest, open the PR, close superseded bump
-#                          PRs, start CI on the PR branch.
+#                          PRs. GitHub holds CI on a PR opened by this
+#                          workflow until a maintainer approves the run.
 #
 # Callers set `concurrency: release-<app>` so two runs for one app (daily
 # check and a manual release) never overlap.
@@ -195,7 +196,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: write
     env:
       APP: ${{ inputs.app }}
       VERSION: ${{ needs.prepare.outputs.version }}
@@ -233,7 +233,7 @@ jobs:
             ${{ needs.prepare.outputs.bumped == 'true' && '- manifest `version` and `releaseNotes` updated and a changelog entry added: existing installs get the Update badge' || '- manifest `version` unchanged (digest-only re-pin): only new installs get this image' }}
 
             Before merging:
-            - [ ] `ci-ok` passed (CI runs on this branch, including the arm64 image)
+            - [ ] CI approved to run ("Approve workflows to run" on this PR) and `ci-ok` passed, including the arm64 images
             - [ ] the release notes and changelog entry read well
             - [ ] for a new upstream major or minor version: tested on a device
 
@@ -249,11 +249,3 @@ jobs:
             gh pr close "$n" --repo "$GITHUB_REPOSITORY" --delete-branch \
               --comment "Superseded by the $VERSION bump PR."
           done
-
-      # PRs opened with GITHUB_TOKEN don't start pull_request workflows;
-      # workflow_dispatch is the exception, so start CI on the branch here.
-      - name: Start CI on the PR branch
-        if: steps.cpr.outputs.pull-request-number != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
