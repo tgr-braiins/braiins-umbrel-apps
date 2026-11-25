@@ -1,0 +1,45 @@
+# Manual release of this app without a new upstream version (changes to
+# this repo's code, compose, manifest or docs). Start it from the Actions
+# tab. With a version, existing installs get the Update badge; with an empty
+# version, the image is rebuilt and re-pinned at the current version, which
+# reaches new installs only. Version schemes: DECISIONS.md.
+
+name: braiins-proxy-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.1.2-1). Empty = re-pin the digest at the current version (new installs only, no Update badge)."
+        required: false
+        default: ""
+      release_notes:
+        description: "Release notes (Markdown), used when a version is given. Shown in the app and added to CHANGELOG-braiins-proxy.md."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-braiins-proxy
+  cancel-in-progress: false
+
+jobs:
+  release:
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: write
+      id-token: write      # signs the build attestation (Sigstore)
+      attestations: write
+    uses: ./.github/workflows/_release.yml
+    with:
+      app: braiins-proxy
+      app_id: braiins-proxy
+      display: Braiins Proxy
+      mode: release
+      version: ${{ inputs.version }}
+      notes: ${{ inputs.release_notes }}
+      branch_prefix: braiins-proxy-release
+      title_prefix: Braiins Proxy packaging release
