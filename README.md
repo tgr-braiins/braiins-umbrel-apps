@@ -7,6 +7,7 @@ An [Umbrel](https://umbrel.com) community app store for [Braiins](https://braiin
 | **Braiins Manager Agent** | Connects the miners on your local network to [Braiins Manager](https://manager.braiins.com), Braiins' fleet-management platform. | 4547 |
 | **Braiins Toolbox** | [Braiins Toolbox](https://braiins.com/toolbox) with its own web interface. Scan your network for ASIC miners, monitor them live, and manage pools, power modes and Braiins OS installs in batch. Fully local, no cloud account. | 4548 |
 | **Bitcoin Data** | Difficulty statistics computed from your own Bitcoin node: current difficulty, the projected next adjustment, network hashrate, history charts and a table of all epochs with CSV/JSON export. No third-party APIs. | 4549 |
+| **Braiins Proxy** | Point your miners at your Umbrel: Braiins Proxy connects them to Braiins Pool, or any pool, over encrypted Stratum V2, with backup pools and a web interface showing miners, hashrate and pool state. Miners connect on port 3333. | 4550 |
 
 > **Status: preview.** The store is on a personal GitHub account until it
 > moves to a Braiins-owned organization. The store URL and the image location
@@ -41,6 +42,20 @@ Install the official **Bitcoin** app first; Bitcoin Data needs it. On first
 start it reads one block header per difficulty epoch from your node, which
 usually takes seconds. After that it keeps itself current. Two home-screen
 widgets are available: a halving countdown and current difficulty stats.
+
+### Braiins Proxy
+
+Open the app and enter your Braiins Pool username under **Pools** (or set up
+another pool), then save. Set the pool URL of your miners to
+`stratum+tcp://<your-umbrel-ip>:3333`; the worker names stay the ones the
+miners send. Ports 3333–3339 on the Umbrel are reserved for miners, so another
+app that uses one of them (another pool or proxy) can't run next to it.
+
+Braiins Proxy updates through the Umbrel App Store like the other apps. Its
+`braiins-proxy update` command and the web interface password are for installs
+outside Umbrel. If the web interface shows a new version before Umbrel does,
+the store's daily check picks it up within a day; you can also turn the check
+off in the proxy's settings.
 
 ### Updates
 
@@ -120,6 +135,11 @@ run as uid 1000 and keep their state in `/data`.
   The whole app is `webui.py` (stdlib-only Python) plus the Braiins Sans fonts.
   It reads the node through the RPC settings the official Bitcoin app exports.
   Run it locally with `DEMO_MODE=1` to get synthetic data without a node.
+- **Braiins Proxy** (`image-braiins-proxy/`). Like Toolbox: it downloads the
+  official tarball from `downloads.braiins.com/braiins-proxy/index.json`,
+  checks its sha256 and runs the binary as it is (`braiins-proxy run`), with
+  its web interface on :8080. The configuration (`/data/config.toml`) and the
+  hashrate history (`/data/state/braiins-proxy/history.db`) are on the volume.
 
 ### CI
 
@@ -147,7 +167,7 @@ A base-image update reaches users only with the app's next release.
 
 ### Releases
 
-Every release arrives as a pull request. `_release.yml`, shared by all five
+Every release arrives as a pull request. `_release.yml`, shared by all seven
 release workflows, does the work in three jobs with separate permissions:
 
 1. **prepare** (read-only): `bump.py` reads the feed or the manual inputs and
@@ -172,6 +192,7 @@ under its reviewer.
 | Manager Agent | `agent-update.yml`, daily | `wrapper-release.yml`, manual | Upstream version. Packaging releases use the next patch with a suffix: `4.15.1-1` |
 | Toolbox | `toolbox-update.yml`, daily | `toolbox-wrapper-release.yml`, manual | Upstream version. Packaging releases add a revision: `26.09-1` |
 | Bitcoin Data | (no upstream) | `braiins-bitcoin-data-release.yml`, manual | Plain semver: `1.13.1` |
+| Braiins Proxy | `braiins-proxy-update.yml`, daily | `braiins-proxy-release.yml`, manual | Upstream version. Packaging releases use the next patch with a suffix: `0.1.2-1` |
 
 - **Daily checks.** If several upstream versions ship before a bump PR is
   merged, the newest PR closes the older ones. Its changelog has an entry for
@@ -186,6 +207,26 @@ under its reviewer.
   new version string (for example the next `-N`), pinned to the previous good
   digest. Reverting alone gives existing installs no Update badge. Never
   delete old image versions from GHCR: older installs still pin them.
+
+#### Adding a new app
+
+The first image has to come from the release workflow before the app reaches
+`main`: CI's Umbrel linter checks that the pinned image exists, and the store
+would list an app whose image can't be pulled. `workflow_dispatch` only works
+for workflows that exist on `main`, so:
+
+1. Land the app's manual release workflow (`<app>-release.yml`) on `main` on
+   its own. It fails if started before step 4, and has no schedule.
+2. On a branch, add everything else: the app folders, the changelog, the
+   `bump.py` entry, the daily check workflow if there is a feed, and the app
+   in `ci.yml` (images matrix and linter list) and `dependabot.yml`.
+   `tests/test_dockerfiles.py` fails if one of these is missing. Put a
+   placeholder digest in the compose file.
+3. Start the release workflow on that branch with an empty version:
+   `gh workflow run <app>-release.yml --ref <branch>`. It builds, tests,
+   attests and pushes the image, and opens a PR into the branch that pins the
+   digest. Merge that PR.
+4. Open the branch's PR into `main`; CI now passes, including the linter.
 
 To release by hand, do what the workflows do:
 
@@ -264,7 +305,7 @@ by hand don't last.
 ### Umbrel platform rules learned on real hardware
 
 - The manifest `port` is a fixed host-port claim, with no conflict detection
-  on the device and no fallback. 4547–4549 are taken by this store; never
+  on the device and no fallback. 4547–4550 are taken by this store; never
   change a released app's port. (The official linter checks new ports against
   the official store.)
 - Community-store app ids must start with the store id (`braiins-`), or the
