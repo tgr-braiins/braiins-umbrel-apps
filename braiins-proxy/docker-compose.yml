@@ -7,7 +7,7 @@ services:
       APP_PORT: 8080
 
   proxy:
-    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.1@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.1@sha256:42a2c783a4c49e5df5cf9a162b9c45a63daa23d2ec945700f8c3e200a54f4ae8
     user: "1000:1000"
     init: true
     # the proxy exits on a fatal error and expects a supervisor to restart it
