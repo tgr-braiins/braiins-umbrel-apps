@@ -19,6 +19,16 @@ store id (`app-repository.ts`: `app.id.startsWith(meta.id)`; our store id is
 UI, and nothing is logged. Bitcoin Data 1.0.0 first shipped as `bitcoin-data`
 and hit exactly this. Display names are free ("Bitcoin Data").
 
+## `ARG TARGETARCH` never gets a default
+
+The agent and Toolbox Dockerfiles pick the release file for the platform from
+`TARGETARCH`, which BuildKit sets for each platform of a multi-arch build.
+Until November 2026 both declared `ARG TARGETARCH=amd64`, and that default won:
+the published arm64 images contained the x86-64 binary and could not start on
+an arm64 Umbrel. Nothing caught it because arm64 was built but never run. Now
+CI runs every image on a native arm64 runner, and a unit test refuses a
+default on any platform `ARG`.
+
 ## Official artifacts only, never source or patches
 
 The agent and Toolbox images download the official signed release files from

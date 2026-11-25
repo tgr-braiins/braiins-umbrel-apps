@@ -1,6 +1,8 @@
 FROM alpine:3.24 AS fetch
 
-ARG TARGETARCH=amd64
+# set by BuildKit per platform; a default here would override it and put the
+# amd64 binary into the arm64 image
+ARG TARGETARCH
 ARG BMA_VERSION=4.15.0
 ARG SHA256_AMD64=f661a36a00a2f0caf2c3badbbc2b53e522942d4cb573a49c9412357c87dfd176
 ARG SHA256_ARM64=f27bbf22b0efb5424ea9adfd7a63f241744bb167d13cac40fad1636577fcccd8
