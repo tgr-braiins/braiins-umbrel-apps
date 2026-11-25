@@ -10,7 +10,7 @@ services:
     # TODO: move to a Braiins-owned registry before official-store submission.
     # The tag@digest is written by bump.py `pin` after the release workflow
     # pushes the multi-arch image (see .github/workflows/braiins-bitcoin-data-release.yml).
-    image: ghcr.io/tgr-braiins/braiins-bitcoin-data:1.14.0@sha256:782ae24ee9cd63f2ad7439cfca8dc5b44068f99f78e718a6512888dcac4b7f8f
+    image: ghcr.io/tgr-braiins/braiins-bitcoin-data:1.14.0@sha256:f8aee7da3583753dc9fbecd2bf7633a4934d59546ccd08941edda373ade84cfd
     user: "1000:1000"
     init: true
     restart: on-failure
