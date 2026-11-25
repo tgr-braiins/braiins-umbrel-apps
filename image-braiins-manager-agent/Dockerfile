@@ -29,8 +29,9 @@ COPY webui.py /usr/lib/bma/webui.py
 COPY fonts/ /usr/lib/bma/fonts/
 COPY entrypoint.sh /usr/lib/bma/entrypoint.sh
 RUN chmod 0755 /usr/lib/bma/entrypoint.sh \
-    # the daemon logs to this hardcoded path; pre-create it writable for uid 1000
-    && touch /var/log/bma.log && chown 1000:1000 /var/log/bma.log \
+    # the daemon logs to this hardcoded path and rotates it by renaming files
+    # next to it, so both the file and /var/log are writable for uid 1000
+    && touch /var/log/bma.log && chown 1000:1000 /var/log /var/log/bma.log \
     && mkdir -p /data && chown 1000:1000 /data
 
 VOLUME /data

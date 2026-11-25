@@ -16,8 +16,8 @@ Data comes from the user's own Bitcoin node (the official `bitcoin` Umbrel app)
 over JSON-RPC. Difficulty only changes every 2016 blocks, so the full history is
 one header per epoch boundary (~460 as of 2026): a one-time backfill, cached in
 /data/epochs.json, then a 30 s tip poll that appends a row per retarget.
-Per-block fees for the CURRENT epoch only come from getblockstats (recent
-blocks, so pruned nodes are fine) and feed the fee-aware hashvalue.
+Per-block fees for the CURRENT epoch only come from getblockstats, newest
+block first, so a pruned node still gives the fees of the blocks it keeps and feed the fee-aware hashvalue.
 
 DEMO_MODE=1 serves deterministic synthetic epochs for UI development without a
 node.
@@ -48,6 +48,10 @@ EPOCH_BLOCKS = 2016
 TARGET_INTERVAL = 600  # seconds per block the retarget aims for
 TWO32 = 2 ** 32
 HALVING_BLOCKS = 210000
+# Blocks into an epoch before its own average is used. Below this, one or two
+# block times (which may even run backwards) would make hashrate, the retarget
+# date and the halving date swing wildly, so the previous epoch is used.
+MIN_SAMPLE = 10
 
 def subsidy_btc(height):
     return 50 / 2 ** (height // HALVING_BLOCKS)
@@ -110,38 +114,59 @@ STATE = {
 
 
 def load_cache():
+    """The cache, or an empty start if it is missing or malformed in any way.
+    It is only an optimisation: everything in it can be re-read from the node."""
     try:
         with open(CACHE) as f:
             data = json.load(f)
-        fees = {int(k): v for k, v in data.get("fees", {}).items()}
-        return data.get("chain"), [tuple(b) for b in data.get("boundaries", [])], fees
-    except (OSError, ValueError):
+        boundaries = []
+        for i, row in enumerate(data["boundaries"]):
+            height, block_time, difficulty = row
+            if not (isinstance(height, int) and height == i * EPOCH_BLOCKS
+                    and isinstance(block_time, (int, float))
+                    and isinstance(difficulty, (int, float)) and difficulty > 0):
+                raise ValueError("bad boundary row %d" % i)
+            boundaries.append((height, block_time, difficulty))
+        fees = {int(k): int(v) for k, v in data.get("fees", {}).items()}
+        chain = data.get("chain")
+        return (chain if isinstance(chain, str) else None), boundaries, fees
+    except Exception:  # noqa: BLE001 — a bad cache must never stop the sync
         return None, [], {}
 
 
 def save_cache(chain, boundaries, fees):
+    """Best effort: a full disk or read-only /data must not stop live
+    updates, so failures are only logged."""
     tmp = CACHE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump({"chain": chain, "boundaries": boundaries, "fees": fees}, f)
-    os.replace(tmp, CACHE)
+    try:
+        with open(tmp, "w") as f:
+            json.dump({"chain": chain, "boundaries": boundaries, "fees": fees}, f)
+        os.replace(tmp, CACHE)
+    except OSError as e:
+        print("cache not saved: %s" % e, flush=True)
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 def sync_fees(fees, tip_height):
     """Fill height->totalfee (sats) for the current epoch; ~2016 getblockstats
     calls worst case on first run, spread over poll cycles (<=400 per cycle).
-    Recent blocks only, so pruned nodes are fine."""
+    Newest first: a pruned node has deleted the oldest blocks of the epoch,
+    and stopping at the first missing block must not hide the ones it kept."""
     epoch_start = tip_height // EPOCH_BLOCKS * EPOCH_BLOCKS
     for h in list(fees):
         if h < epoch_start or h > tip_height:
             del fees[h]
     fetched = 0
-    for h in range(max(1, epoch_start), tip_height + 1):
+    for h in range(tip_height, max(1, epoch_start) - 1, -1):
         if h in fees:
             continue
         try:
             fees[h] = rpc("getblockstats", [h, ["totalfee"]])["totalfee"]
         except RpcError:
-            break  # node busy/pruned beyond reach: retry next cycle
+            break  # node busy, or pruned below here: retry next cycle
         fetched += 1
         if fetched >= 400:
             break
@@ -259,7 +284,7 @@ def build_rows(state):
         elif tip:
             elapsed = tip[0] - height
             row.update(current=True, blocks=elapsed)
-            if elapsed > 0:
+            if elapsed >= MIN_SAMPLE:
                 duration = max(1, tip[1] - start_time)
                 row.update(avg_interval=duration / elapsed,
                            hashrate=difficulty * TWO32 * elapsed / duration)
@@ -293,17 +318,23 @@ def build_summary(state, rows):
     cur, tip = rows[-1], state["tip"]
     elapsed = cur["blocks"] or 0
     remaining = EPOCH_BLOCKS - elapsed
-    avg = cur["avg_interval"]
+    avg = cur["avg_interval"]  # None until MIN_SAMPLE blocks into the epoch
+    hashrate = cur["hashrate"]
+    if hashrate is None and len(rows) > 1:
+        hashrate = rows[-2]["hashrate"]  # early in an epoch: the previous one
     projected = None
-    if avg and elapsed >= 10:
-        projected = min(4.0, max(0.25, TARGET_INTERVAL / avg)) - 1
+    if avg:
+        # Consensus compares the time of the epoch's 2015 intervals (first to
+        # last block) with 2016 target intervals, hence 2016/2015.
+        ratio = TARGET_INTERVAL * EPOCH_BLOCKS / ((EPOCH_BLOCKS - 1) * avg)
+        projected = min(4.0, max(0.25, ratio)) - 1
     s.update({
         "tip_height": tip[0], "tip_time": tip[1],
         "difficulty": cur["difficulty"], "epoch": cur["epoch"],
         "last_change": cur["change"],
         "elapsed": elapsed, "remaining": remaining,
         "progress": elapsed / EPOCH_BLOCKS,
-        "avg_interval": avg, "hashrate": cur["hashrate"],
+        "avg_interval": avg, "hashrate": hashrate,
         "projected_change": projected,
         "eta": tip[1] + remaining * (avg or TARGET_INTERVAL),
         "hashvalue": hashvalue_sats(cur["difficulty"], tip[0]),
@@ -1149,7 +1180,7 @@ function renderTiles() {
     hashEl.appendChild(u);
   }
   set("t-hash-sub", s.avg_interval != null
-    ? "avg block " + fmtInterval(s.avg_interval) + " this epoch" : "current epoch average");
+    ? "avg block " + fmtInterval(s.avg_interval) + " this epoch" : "previous epoch average");
   // fees-inclusive is the headline; subsidy-only only bridges the fee backfill
   const hvVal = s.hashvalue_with_fees != null ? s.hashvalue_with_fees : s.hashvalue;
   const hv = document.getElementById("t-hv");
@@ -2091,6 +2122,10 @@ PAGE = PAGE.replace("__CSS__", CSS).replace("__FAVICON__", FAVICON)
 
 
 class Handler(BaseHTTPRequestHandler):
+    # The port is reachable from every container on Umbrel's network: a
+    # client that connects and goes quiet must not hold a thread forever.
+    timeout = 15
+
     def _send(self, body, ctype, cache="no-store"):
         self.send_response(200)
         self.send_header("Content-Type", ctype)

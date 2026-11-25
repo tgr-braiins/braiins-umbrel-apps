@@ -18,10 +18,16 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-CONFIG = "/data/daemon.yaml"
+CONFIG = os.environ.get("BMA_CONFIG", "/data/daemon.yaml")  # override for tests
+# Sent by this page's own fetch(). A plain HTML form can't send a custom
+# header, and a script on another site would need a CORS preflight, which
+# this server never grants: so a save from another site is refused.
+SAVE_HEADER = "X-BMA-Setup"
+MAX_BODY = 4096
 FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 FONTS = ("braiinssans-regular.woff2", "braiinssans-bold.woff2")
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
@@ -237,8 +243,13 @@ document.getElementById('form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   msg.className = ''; msg.textContent = 'Saving…';
   const body = new URLSearchParams(new FormData(ev.target));
-  const r = await fetch('', {method: 'POST', body});
-  const res = await r.json();
+  let res;
+  try {
+    const r = await fetch('', {method: 'POST', body, headers: {'X-BMA-Setup': '1'}});
+    res = await r.json();
+  } catch (e) {
+    res = {ok: false, message: 'Saving failed. Reload the page and try again.'};
+  }
   msg.className = res.ok ? 'ok' : 'err';
   msg.textContent = res.message;
   if (res.ok) { document.getElementById('secret_key').value = ''; refresh(); }
@@ -342,6 +353,9 @@ def widget_status():
 
 
 class Handler(BaseHTTPRequestHandler):
+    # reachable from every container on Umbrel's network: drop idle clients
+    timeout = 15
+
     def _send(self, body, ctype, cache="no-store"):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
@@ -378,21 +392,55 @@ class Handler(BaseHTTPRequestHandler):
                 .replace("__VERSION__", html.escape(VERSION)))
         self._send(page.encode(), "text/html; charset=utf-8")
 
+    def _reply(self, ok, message, code=200):
+        body = json.dumps({"ok": ok, "message": message}).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_POST(self):
-        length = int(self.headers.get("Content-Length", 0))
-        fields = urllib.parse.parse_qs(self.rfile.read(length).decode())
+        # Saving credentials decides whose Braiins Manager the miners report
+        # to, so only this page may do it: not a form or script on another
+        # site, including another Umbrel app on a different port.
+        fetch_site = self.headers.get("Sec-Fetch-Site")
+        if self.headers.get(SAVE_HEADER) != "1" or fetch_site not in (None, "same-origin"):
+            self._reply(False, "Refused: save the credentials from this app's own page.", 403)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            length = -1
+        if not 0 <= length <= MAX_BODY:
+            self._reply(False, "Bad request.", 400)
+            return
+        try:
+            fields = urllib.parse.parse_qs(self.rfile.read(length).decode())
+        except (UnicodeDecodeError, ValueError):
+            self._reply(False, "Bad request.", 400)
+            return
         agent_id = fields.get("agent_id", [""])[0].strip()
         secret_key = fields.get("secret_key", [""])[0].strip()
         if not UUID_RE.match(agent_id) or not UUID_RE.match(secret_key):
-            self._send(json.dumps({"ok": False, "message": "Both values must be UUIDs like 123e4567-e89b-42d3-a456-426614174000."}).encode(), "application/json")
+            self._reply(False, "Both values must be UUIDs like 123e4567-e89b-42d3-a456-426614174000.")
             return
-        tmp = CONFIG + ".tmp"
-        # 0600: credentials shouldn't be world-readable on the host
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            f.write(f"agent_id: {agent_id}\nsecret_key: {secret_key}\n")
-        os.replace(tmp, CONFIG)
-        self._send(json.dumps({"ok": True, "message": "Saved. The agent is restarting with the new credentials."}).encode(), "application/json")
+        try:
+            # a unique temp file per save (mkstemp: mode 0600, so credentials
+            # are never world-readable), then an atomic rename
+            fd, tmp = tempfile.mkstemp(dir=os.path.dirname(CONFIG), prefix=".daemon.yaml.")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    f.write(f"agent_id: {agent_id}\nsecret_key: {secret_key}\n")
+                os.replace(tmp, CONFIG)
+            except BaseException:
+                os.unlink(tmp)
+                raise
+        except OSError as e:
+            self._reply(False, "Could not save the credentials (%s)." % e.strerror, 500)
+            return
+        self._reply(True, "Saved. The agent is restarting with the new credentials.")
 
     def log_message(self, fmt, *args):
         pass

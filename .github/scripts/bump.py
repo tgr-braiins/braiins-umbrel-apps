@@ -113,11 +113,12 @@ def out(key, value):
 
 def parse_version(app, v):
     """Order versions with an optional wrapper suffix. See module docstring
-    for why suffix ordering differs between the two apps."""
+    for why suffix ordering differs between the two apps. Raises ValueError
+    for a string that isn't a version of this app."""
     m = re.fullmatch(app["version_re"], v)
     if not m:
-        sys.exit(f"unparseable version: {v!r}")
-    major, minor, patch, suffix = m.groups()
+        raise ValueError(f"unparseable version: {v!r}")
+    major, minor, patch, suffix = (m.groups() + (None,))[:4]
     core = (int(major), int(minor), int(patch or 0))
     n = int(suffix) if suffix and suffix.isdigit() else 0
     if app["suffix_above_core"]:
@@ -127,16 +128,41 @@ def parse_version(app, v):
     return core + pre
 
 
-def newer_releases(app, cur):
-    """Feed releases newer than `cur`, oldest first."""
+def fetch_feed(app):
     # the CDN rejects urllib's default User-Agent
     req = urllib.request.Request(app["feed"], headers={"User-Agent": "braiins-umbrel-update-check"})
     with urllib.request.urlopen(req, timeout=30) as r:
-        feed = json.load(r)
-    key = app["feed_version_key"]
-    rels = [rel for rel in feed["releases"]
-            if parse_version(app, rel["metadata"][key]) > parse_version(app, cur)]
-    return sorted(rels, key=lambda rel: parse_version(app, rel["metadata"][key]))
+        return json.load(r)
+
+
+def feed_version(app, rel):
+    """The release's version if it is a final upstream release this script
+    understands, else None. Feed versions never carry a suffix: one there is
+    an upstream pre-release (e.g. 26.07-rc1), which must not be packaged and
+    would sort wrongly under the wrapper-suffix rules."""
+    v = (rel.get("metadata") or {}).get(app["feed_version_key"])
+    if not isinstance(v, str):
+        return None
+    try:
+        parse_version(app, v)
+    except ValueError:
+        return None
+    m = re.fullmatch(app["version_re"], v)
+    return v if (m.groups() + (None,))[3] is None else None
+
+
+def newer_releases(app, cur, feed):
+    """Final feed releases newer than `cur`, oldest first. Entries that
+    aren't final releases are skipped with a warning, so one odd entry
+    can't stop every update."""
+    rels = []
+    for rel in feed.get("releases", []):
+        v = feed_version(app, rel)
+        if v is None:
+            print(f"skipping feed entry {rel.get('metadata', {}).get(app['feed_version_key'])!r}", file=sys.stderr)
+        elif parse_version(app, v) > parse_version(app, cur):
+            rels.append(rel)
+    return sorted(rels, key=lambda rel: parse_version(app, feed_version(app, rel)))
 
 
 def current_version(app):
@@ -165,7 +191,10 @@ def prepend_changelog(app, version, desc, date=None):
     if marker in text:
         text = text.replace(marker, marker + entry, 1)
     else:  # marker gone: fall back to inserting before the newest entry
-        text = re.sub(r"(?=^## \[)", entry.lstrip("\n") + "\n\n", text, count=1, flags=re.M)
+        new_entry = entry.lstrip("\n") + "\n\n"
+        text, n = re.subn(r"(?=^## \[)", lambda _: new_entry, text, count=1, flags=re.M)
+        if n != 1:
+            text = text.rstrip("\n") + entry + "\n"
     changelog.write_text(text)
 
 
@@ -176,33 +205,48 @@ def write_manifest_release(app, version, desc, date=None):
     manifest = ROOT / app["manifest"]
     desc = desc.replace("\r", "").strip() or f"{app['display']} {version}."
     t = manifest.read_text()
-    t = re.sub(r'^version: ".*"', f'version: "{version}"', t, count=1, flags=re.M)
+    # Replacements are functions, never strings: release notes and feed text
+    # may contain backslashes, which re.sub would read as escapes.
+    t, n = re.subn(r'^version: ".*"$', lambda _: f'version: "{version}"', t, count=1, flags=re.M)
+    if n != 1:
+        sys.exit(f"no version line in {manifest}")
     block = "\n".join(("  " + line).rstrip() for line in desc.splitlines())
-    t = re.sub(r"releaseNotes: .*?\n\ndeveloper:", f"releaseNotes: |-\n{block}\n\ndeveloper:", t, count=1, flags=re.S)
+    # The value runs up to the next top-level key, whatever follows it, and
+    # whether it is "" or a block. A blank line keeps the manifest readable.
+    t, n = re.subn(r"^releaseNotes:.*?\n(?=\S)", lambda _: f"releaseNotes: |-\n{block}\n\n",
+                   t, count=1, flags=re.M | re.S)
+    if n != 1:
+        sys.exit(f"no releaseNotes key followed by another key in {manifest}")
     manifest.write_text(t)
     prepend_changelog(app, version, desc, date)
 
 
 def check(app):
     cur = current_version(app)
-    rels = newer_releases(app, cur)
+    rels = newer_releases(app, cur, fetch_feed(app))
     if not rels:
         out("changed", "false")
         out("version", cur)
         return
     meta = rels[-1]["metadata"]
-    new = meta[app["feed_version_key"]]
+    new = feed_version(app, rels[-1])
 
-    assets = meta["assets"]
-    missing = [a for a in ("linux_x86_64", "linux_aarch64") if not assets.get(a)]
-    if missing:
-        sys.exit(f"release {new} is missing required assets: {missing}")
+    # The feed is untrusted input: its checksums go into the Dockerfile and
+    # run in CI, so accept exactly 64 hex digits and nothing else.
+    assets = meta.get("assets") or {}
+    sums = {}
+    for arch, arg in (("linux_x86_64", "SHA256_AMD64"), ("linux_aarch64", "SHA256_ARM64")):
+        checksum = ((assets.get(arch) or {}).get("integrity") or {}).get("checksum")
+        if not isinstance(checksum, str) or not re.fullmatch(r"[0-9a-f]{64}", checksum):
+            sys.exit(f"release {new}: missing or malformed {arch} checksum: {checksum!r}")
+        sums[arg] = checksum
 
     dockerfile = ROOT / app["dockerfile"]
     t = dockerfile.read_text()
-    t = re.sub(rf"ARG {app['version_arg']}=.*", f"ARG {app['version_arg']}={new}", t)
-    t = re.sub(r"ARG SHA256_AMD64=.*", f"ARG SHA256_AMD64={assets['linux_x86_64']['integrity']['checksum']}", t)
-    t = re.sub(r"ARG SHA256_ARM64=.*", f"ARG SHA256_ARM64={assets['linux_aarch64']['integrity']['checksum']}", t)
+    for arg, value in ((app["version_arg"], new), *sums.items()):
+        t, n = re.subn(rf"^ARG {arg}=.*$", lambda _, a=arg, v=value: f"ARG {a}={v}", t, flags=re.M)
+        if n != 1:
+            sys.exit(f"expected exactly one ARG {arg} in {dockerfile}, found {n}")
     dockerfile.write_text(t)
 
     # Versions skipped since the last merged bump (bump PRs left unmerged while
@@ -221,12 +265,21 @@ def release(app, version, notes_file):
     # Accept the app's core version format with an optional wrapper suffix
     # (agent "4.11.1-1" next-patch pre-release, toolbox "26.06-1" revision —
     # see module docstring for the ordering rationale).
-    if not re.fullmatch(app["version_re"], version):
+    try:
+        new_key = parse_version(app, version)
+    except ValueError:
         sys.exit(f"not a valid version: {version}")
-    if version == current_version(app):
+    cur = current_version(app)
+    if version == cur:
         sys.exit(f"version {version} is unchanged; existing installs get no "
                  "Update badge. Pass a higher version, or run a digest-only "
                  "re-pin instead (empty version input).")
+    # A lower version would make the next daily check "upgrade" back to the
+    # feed version, undoing this release (e.g. agent 4.15.0-1 sorts below
+    # 4.15.0; the agent scheme is 4.15.1-1).
+    if new_key <= parse_version(app, cur):
+        sys.exit(f"version {version} does not sort above the current {cur}; "
+                 "see the version schemes in DECISIONS.md")
     notes = pathlib.Path(notes_file).read_text() if notes_file else ""
     write_manifest_release(app, version, notes)
     out("version", version)
@@ -237,16 +290,17 @@ def pin(app, version, digest):
         sys.exit(f"not a digest: {digest}")
     compose = ROOT / app["compose"]
     t = compose.read_text()
-    t, n = re.subn(
-        r"image: ghcr\.io/\S+",
-        f"image: ghcr.io/{REGISTRY_OWNER}/{app['image']}:{version}@{digest}",
-        t,
-    )
+    try:
+        parse_version(app, version)
+    except ValueError:
+        sys.exit(f"not a valid version: {version}")
+    image = f"image: ghcr.io/{REGISTRY_OWNER}/{app['image']}:{version}@{digest}"
+    t, n = re.subn(r"image: ghcr\.io/\S+", lambda _: image, t)
     if n != 1:
         sys.exit(f"expected exactly one image line in compose, found {n}")
     if app["compose_app_version"]:
         # keep the footer version (webui.py reads APP_VERSION) in sync with the tag
-        t, n = re.subn(r'APP_VERSION: ".*"', f'APP_VERSION: "{version}"', t)
+        t, n = re.subn(r'APP_VERSION: ".*"', lambda _: f'APP_VERSION: "{version}"', t)
         if n != 1:
             sys.exit(f"expected exactly one APP_VERSION line in compose, found {n}")
     compose.write_text(t)
@@ -261,6 +315,8 @@ if __name__ == "__main__":
         sys.exit(f"unknown app {app_name!r}; expected one of {sorted(APPS)}")
     app = APPS[app_name]
     if cmd == "check":
+        if not app["feed"]:
+            sys.exit(f"{app_name} has no upstream feed; use release")
         check(app)
     elif cmd == "release":
         release(app, args["--version"], args.get("--notes-file"))

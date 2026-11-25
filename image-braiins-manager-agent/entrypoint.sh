@@ -10,9 +10,19 @@ CONFIG=/data/daemon.yaml
 LOG=/var/log/bma.log
 : > "$LOG"
 tail -F "$LOG" &
+TAIL_PID=$!
+
+UUID='[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[1-5][0-9a-fA-F]\{3\}-[89abAB][0-9a-fA-F]\{3\}-[0-9a-fA-F]\{12\}'
+is_uuid() { printf '%s' "$1" | grep -qx "$UUID"; }
 
 if [ ! -f "$CONFIG" ] && [ -n "${AGENT_ID:-}" ] && [ -n "${SECRET_KEY:-}" ]; then
-    printf 'agent_id: %s\nsecret_key: %s\n' "$AGENT_ID" "$SECRET_KEY" > "$CONFIG"
+    if is_uuid "$AGENT_ID" && is_uuid "$SECRET_KEY"; then
+        # same as the web UI: mode 0600, written to a temp file, then renamed
+        (umask 077 && printf 'agent_id: %s\nsecret_key: %s\n' "$AGENT_ID" "$SECRET_KEY" > "$CONFIG.env.tmp")
+        mv "$CONFIG.env.tmp" "$CONFIG"
+    else
+        echo "AGENT_ID / SECRET_KEY are not UUIDs; ignoring them" >&2
+    fi
 fi
 
 python3 /usr/lib/bma/webui.py &
@@ -21,9 +31,16 @@ WEBUI_PID=$!
 DAEMON_PID=""
 CONFIG_MTIME=""
 
+# docker stop: let the daemon finish its shutdown before this script exits.
+# With init: true this shell is the container's main process; once it exits,
+# everything left in the container is killed at once.
 term() {
-    [ -n "$DAEMON_PID" ] && kill "$DAEMON_PID" 2>/dev/null || true
     kill "$WEBUI_PID" 2>/dev/null || true
+    if [ -n "$DAEMON_PID" ]; then
+        kill "$DAEMON_PID" 2>/dev/null || true
+        wait "$DAEMON_PID" 2>/dev/null || true
+    fi
+    kill "$TAIL_PID" 2>/dev/null || true
     exit 0
 }
 trap term TERM INT
@@ -53,5 +70,8 @@ while true; do
             continue
         fi
     fi
-    sleep 5
+    # sleep in the background and wait for it, so a TERM runs the trap at
+    # once instead of after the sleep
+    sleep 5 &
+    wait $! || true
 done
