@@ -13,6 +13,28 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.15.0] - 2026-11-24
+
+The Braiins Manager Agent **4.15.0** release makes data polling more reliable on large sites, moves Braiins OS error polling to the agent, and fixes two crashes.
+
+### New
+- The agent now controls the error polling of Braiins OS miners, which makes it more efficient.
+
+### Improved
+- A slow or unreachable miner no longer delays the next polling round. Other miners no longer miss data, which showed as short dips in power charts.
+- An unreachable Braiins OS miner now fails its poll quickly, not after a series of connection timeouts.
+- When the connection to Braiins Manager is slow, the agent no longer collects a backlog of waiting polls.
+- A miner that does not answer in time is now reported as a timeout, not as a fetch error.
+- On stock Antminers, a rejected SSH login is now clearly reported as an SSH credentials issue, not as an HTTP login issue.
+- Advanced settings: a miner whose Braiins OS version no longer has a setting is skipped when that setting changes. Reset to default leaves out removed settings.
+- Miners with AnthillOS firmware are now marked as unsupported.
+
+### Fixed
+- The agent stopped when a rotated log file was deleted while it ran, for example by antivirus software.
+- The agent GUI crashed on computers with old or weak graphics drivers, for example Raspberry Pi.
+
+For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
+
 ## [4.14.1-1] - 2026-11-23
 
 Maintenance release of the Umbrel package (Braiins Manager Agent 4.14.0 unchanged): rebuilt on Alpine 3.24. The settings page now restarts by itself if it ever stops, and saving new credentials twice in quick succession reliably restarts the agent with the last ones.
