@@ -76,11 +76,11 @@ jobs:
       - name: Lint
         run: |
           set -eu
-          apps="braiins-manager-agent braiins-toolbox braiins-bitcoin-data"
-          for app in $apps; do cp -r "$app" umbrel-apps/; done
+          set -- braiins-manager-agent braiins-toolbox braiins-bitcoin-data
+          for app in "$@"; do cp -r "$app" umbrel-apps/; done
           cd umbrel-apps
           npm ci --no-audit --no-fund
-          node .tools/lint-apps.mjs $apps --check-images --format json > "$RUNNER_TEMP/lint.json" || true
+          node .tools/lint-apps.mjs "$@" --check-images --format json > "$RUNNER_TEMP/lint.json" || true
           python3 ../.github/scripts/umbrel_lint.py "$RUNNER_TEMP/lint.json"
 
   ci-ok:
