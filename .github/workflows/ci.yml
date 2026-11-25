@@ -2,9 +2,8 @@
 # smoke test of every app on amd64 and arm64, and the official Umbrel linter.
 # `ci-ok` is the single required check on main.
 #
-# Bot PRs opened by the release workflows use GITHUB_TOKEN, which doesn't
-# start pull_request workflows, so _release.yml starts this one on the PR
-# branch with workflow_dispatch instead.
+# On PRs opened by the release workflows (with GITHUB_TOKEN), GitHub holds
+# this workflow until a maintainer approves the run on the PR page.
 
 name: ci
 
