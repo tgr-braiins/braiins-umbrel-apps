@@ -1,4 +1,4 @@
-# The release pipeline shared by every app, called by the five small
+# The release pipeline shared by every app, called by the seven small
 # workflows next to it. It opens a PR; a maintainer merges it, so nothing
 # reaches users without a human click.
 #

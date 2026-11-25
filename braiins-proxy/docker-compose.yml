@@ -1,0 +1,26 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: braiins-proxy_proxy_1
+      APP_PORT: 8080
+
+  proxy:
+    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.1@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    user: "1000:1000"
+    init: true
+    # the proxy exits on a fatal error and expects a supervisor to restart it
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 1048576
+    # Miners connect straight to the Umbrel's IP. The default configuration
+    # listens on 3333; the rest of the range is free for a different port
+    # chosen in the web interface.
+    ports:
+      - "3333-3339:3333-3339"
+    volumes:
+      - ${APP_DATA_DIR}/data:/data

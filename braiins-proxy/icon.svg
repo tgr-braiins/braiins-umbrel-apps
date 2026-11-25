@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="230" fill="#6B50FF"/>
+  <!-- many miners -> the proxy -> the pool -->
+  <g fill="none" stroke="#fff" stroke-width="48" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M208 300 C 360 300 380 512 472 512 M208 512 H472 M208 724 C 360 724 380 512 472 512 M472 512 H736"/>
+  </g>
+  <g fill="#fff">
+    <circle cx="208" cy="300" r="44"/><circle cx="208" cy="512" r="44"/><circle cx="208" cy="724" r="44"/>
+    <circle cx="472" cy="512" r="80"/>
+    <rect x="692" y="428" width="168" height="168" rx="36"/>
+  </g>
+</svg>

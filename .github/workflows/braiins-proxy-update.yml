@@ -1,0 +1,37 @@
+# Daily check of the public Braiins Proxy release feed. When a new version
+# ships, _release.yml builds it and opens a bump PR for a maintainer to merge.
+# repository_dispatch (type braiins-proxy-release) is there for a future push from
+# the Braiins Proxy release pipeline instead of polling.
+
+name: braiins-proxy-update
+
+on:
+  schedule:
+    - cron: "13 6 * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [braiins-proxy-release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-braiins-proxy
+  cancel-in-progress: false
+
+jobs:
+  release:
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: write
+      id-token: write      # signs the build attestation (Sigstore)
+      attestations: write
+    uses: ./.github/workflows/_release.yml
+    with:
+      app: braiins-proxy
+      app_id: braiins-proxy
+      display: Braiins Proxy
+      mode: check
+      branch_prefix: braiins-proxy-update
+      title_prefix: Braiins Proxy

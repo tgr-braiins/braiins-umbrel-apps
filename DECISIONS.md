@@ -5,7 +5,8 @@ Each entry says what we did, why, and when to revisit it.
 
 The first part applies to every app in the store. The app-specific decisions
 follow: [Manager Agent](#braiins-manager-agent),
-[Toolbox](#braiins-toolbox), [Bitcoin Data](#bitcoin-data).
+[Toolbox](#braiins-toolbox), [Bitcoin Data](#bitcoin-data),
+[Braiins Proxy](#braiins-proxy).
 
 ---
 
@@ -53,11 +54,12 @@ Data), it is one Python file with no framework and no dependencies, served by
 the app container. This keeps images small and the attack surface minimal.
 Deliberately not a JS app, not Flask, not a separate UI container.
 
-## Fixed ports 4547–4549
+## Fixed ports 4547–4550
 
 Umbrel's manifest `port` is a fixed host-port claim, with no conflict detection
 or fallback anywhere in the platform: an install simply fails if the port is
 taken. The store uses a block: 4547 agent, 4548 Toolbox, 4549 Bitcoin Data,
+4550 Braiins Proxy,
 each checked free in the official store when it was claimed. The compose
 `APP_PORT` is the container-internal port and can never conflict. **Never
 change a released app's port**: users' bookmarks and the app URL depend on it.
@@ -414,3 +416,74 @@ surfaces).
 
 The page has a navigation slot for more data modules later; difficulty is
 only the first.
+
+---
+
+# Braiins Proxy
+
+## The public release, not the Farm Proxy release candidates
+
+Braiins Proxy (called "braiins sv2 proxy" internally, and Farm Proxy in its
+own log lines) is packaged from the public feed
+(`downloads.braiins.com/braiins-proxy/index.json`), the same way as Toolbox.
+Earlier tests on a home Umbrel used internal 26.11 release candidates that
+were never published; their app id was `braiins-farm-proxy`. The public
+product has its own version line (0.1.1 was the first), so the app id is
+`braiins-proxy` and nothing from the test packages carries over.
+
+## The official binary as it is
+
+The binary serves its own web interface and API, so the container runs
+`braiins-proxy run` with no entrypoint script. `CONFIG_FILE`, `HOME` and
+`XDG_STATE_HOME` put the configuration and the history database on `/data`;
+the history is left out of Umbrel backups (`backupIgnore: data/state/*`), the
+configuration is kept. A missing configuration is not an error: the proxy
+starts with a Braiins Pool configuration that the web interface then edits.
+
+## No web interface password, and its update command is not used
+
+The proxy asks for a password only when a `gui-password` file exists, which
+`braiins-proxy install` creates. In the container there is none, so the web
+interface is open to whatever reaches port 8080 of the container: Umbrel's
+app proxy, behind Umbrel's login, and other containers on the shared Docker
+network. That is the same accepted risk as the other apps ("Web pages without
+login on the shared Docker network").
+
+`braiins-proxy update` replaces the binary of a systemd service and is not
+used here; updates come from this store like every other app ("Updates only
+through Umbrel, never self-update"). The proxy's own release check is on by
+default and shows a message with `sudo braiins-proxy update`. It is left on:
+it tells the user a new version exists, and the store's daily check follows
+within a day. If that message causes confusion, ask the proxy team for a way
+to turn it off from the environment, so we don't have to write a configuration
+file the proxy considers its own.
+
+## Mining ports 3333–3339 on the host
+
+Miners connect straight to the Umbrel's IP, so the mining ports are published
+on the host. The default configuration listens on 3333; the rest of the range
+leaves room for a different port chosen in the web interface. Another app
+that publishes one of these ports can't run next to this one. Revisit if users
+need it next to another pool app.
+
+## Version scheme: like the agent
+
+Upstream uses semver. A packaging release of ours is a pre-release of the next
+patch (`0.1.2-1`), so the next upstream version (`0.1.2`) still sorts above
+it and the daily check picks it up.
+
+## The first release notes are ours
+
+The feed's description of 0.1.1 describes the standalone Linux install: a
+one-command install, a self-updating service and a password-protected web
+interface. None of that applies on Umbrel, so the first package has its own
+notes. Later versions take the feed description, like Toolbox.
+
+## The certificate in the binary has a lifetime
+
+The proxy logs "Certificate is valid for N days" at start (36 days for 0.1.1
+on 2026-11-25) and exports `remaining_certificate_validity_days` on
+`/metrics`. The release candidates had the same. If an installed proxy stops
+connecting to the pool around that date, check this first, and whether a
+newer release is out.
+

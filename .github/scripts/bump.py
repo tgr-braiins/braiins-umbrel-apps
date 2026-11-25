@@ -99,6 +99,22 @@ APPS = {
         "suffix_above_core": True,
         "compose_app_version": False,
     },
+    "braiins-proxy": {
+        "display": "Braiins Proxy",
+        "feed": "https://downloads.braiins.com/braiins-proxy/index.json",
+        "feed_version_key": "braiins_proxy_version",
+        "dockerfile": "image-braiins-proxy/Dockerfile",
+        "version_arg": "BRAIINS_PROXY_VERSION",
+        "manifest": "braiins-proxy/umbrel-app.yml",
+        "compose": "braiins-proxy/docker-compose.yml",
+        "changelog": "CHANGELOG-braiins-proxy.md",
+        "image": "braiins-proxy",
+        # semver like the agent: a packaging release is a pre-release of the
+        # next patch (0.1.2-1), so the next upstream version still sorts above
+        "version_re": r"(\d+)\.(\d+)\.(\d+)(?:[-+]([0-9A-Za-z.-]+))?",
+        "suffix_above_core": False,
+        "compose_app_version": False,
+    },
 }
 
 

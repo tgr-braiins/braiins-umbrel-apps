@@ -19,6 +19,7 @@ bump = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bump)
 
 AGENT, TOOLBOX, DATA = bump.APPS["agent"], bump.APPS["toolbox"], bump.APPS["braiins-bitcoin-data"]
+PROXY = bump.APPS["braiins-proxy"]
 SUM_A, SUM_B = "a" * 64, "b" * 64
 
 
@@ -91,6 +92,12 @@ class VersionOrder(unittest.TestCase):
         with self.assertRaises(ValueError):
             bump.parse_version(DATA, "1.13.1-1")
 
+    def test_proxy_packaging_release_sorts_between_versions(self):
+        v = lambda s: bump.parse_version(PROXY, s)
+        self.assertLess(v("0.1.1"), v("0.1.2-1"))
+        self.assertLess(v("0.1.2-1"), v("0.1.2"))
+        self.assertLess(v("0.1.2"), v("0.2.0"))
+
     def test_garbage_is_rejected(self):
         for s in ("", "4.15", "v4.15.0", "4.15.0\nRUN x", "26.09 "):
             with self.assertRaises(ValueError, msg=s):
@@ -155,6 +162,13 @@ class Check(RepoCopy):
         self.assertIn(f"ARG SHA256_AMD64={SUM_A}", dockerfile)
         self.assertIn(f"ARG SHA256_ARM64={SUM_B}", dockerfile)
         self.assertEqual(bump.current_version(TOOLBOX), "99.01")
+
+    def test_proxy_feed_version_is_written(self):
+        self.run_check(PROXY, [feed_entry(PROXY, "99.0.0")])
+        dockerfile = self.read(PROXY, "dockerfile")
+        self.assertIn("ARG BRAIINS_PROXY_VERSION=99.0.0", dockerfile)
+        self.assertIn(f"ARG SHA256_ARM64={SUM_B}", dockerfile)
+        self.assertIn("## [99.0.0]", self.read(PROXY, "changelog"))
 
     def test_skipped_versions_get_changelog_entries(self):
         self.run_check(AGENT, [feed_entry(AGENT, "98.0.0", description="Older."),

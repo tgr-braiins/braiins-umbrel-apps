@@ -15,6 +15,7 @@ updates:
       - /image-braiins-manager-agent
       - /image-braiins-toolbox
       - /image-braiins-bitcoin-data
+      - /image-braiins-proxy
     schedule:
       interval: weekly
     groups:

@@ -30,5 +30,23 @@ class Dockerfiles(unittest.TestCase):
                 self.assertIn('user: "1000:1000"', compose.read_text())
 
 
+class EveryAppIsWired(unittest.TestCase):
+    """A new app needs the same wiring as the others; missing one piece
+    means it is silently not built, linted or updated."""
+
+    def test_ci_dependabot_and_bump_know_every_app(self):
+        ci = (REPO / ".github/workflows/ci.yml").read_text()
+        dependabot = (REPO / ".github/dependabot.yml").read_text()
+        bump = (REPO / ".github/scripts/bump.py").read_text()
+        for manifest in REPO.glob("braiins-*/umbrel-app.yml"):
+            app = manifest.parent.name
+            with self.subTest(app=app):
+                self.assertTrue((REPO / f"image-{app}/smoke.sh").exists())
+                self.assertRegex(ci, rf"app: \[[^\]]*\b{app}\b")
+                self.assertRegex(ci, rf"set -- [^\n]*\b{app}\b")
+                self.assertIn(f"/image-{app}\n", dependabot)
+                self.assertIn(f'"manifest": "{app}/umbrel-app.yml"', bump)
+
+
 if __name__ == "__main__":
     unittest.main()
