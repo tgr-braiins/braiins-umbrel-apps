@@ -1,301 +1,239 @@
 # Braiins Umbrel Apps
 
-Umbrel community app store for [Braiins](https://braiins.com) apps, currently:
+An [Umbrel](https://umbrel.com) community app store for [Braiins](https://braiins.com) apps.
 
-- **Braiins Manager Agent** — connects mining devices on your local network to
-  [Braiins Manager](https://manager.braiins.com), Braiins' fleet-management
-  platform.
-- **Braiins Toolbox** — [Braiins Toolbox](https://braiins.com/toolbox) with its
-  own web GUI: scan your network for ASIC miners, monitor them live, and
-  batch-manage pools, power modes, and Braiins OS installs — fully local, no
-  cloud account.
-- **Bitcoin Data** — difficulty epoch analytics computed from your own Bitcoin
-  node: current difficulty, projected next adjustment, epoch progress,
-  estimated network hashrate, full-history charts, and a per-epoch table with
-  CSV/JSON export. Requires the official Bitcoin app; no third-party APIs.
+| App | What it does | Umbrel port |
+|---|---|---|
+| **Braiins Manager Agent** | Connects the miners on your local network to [Braiins Manager](https://manager.braiins.com), Braiins' fleet-management platform. | 4547 |
+| **Braiins Toolbox** | [Braiins Toolbox](https://braiins.com/toolbox) with its own web interface. Scan your network for ASIC miners, monitor them live, and manage pools, power modes and Braiins OS installs in batch. Fully local, no cloud account. | 4548 |
+| **Bitcoin Data** | Difficulty statistics computed from your own Bitcoin node: current difficulty, the projected next adjustment, network hashrate, history charts and a table of all epochs with CSV/JSON export. No third-party APIs. | 4549 |
 
-> **Status: test/preview.** This store lives on a personal account while we
-> finalize hosting under a Braiins-owned organization. Expect the store URL and
-> image location to change before general availability.
+> **Status: preview.** The store is on a personal GitHub account until it
+> moves to a Braiins-owned organization. The store URL and the image location
+> will change before general availability.
 
-## Install (Umbrel users)
+## For Umbrel users
 
-1. In umbrelOS, open **App Store → ⋯ → Community App Stores**.
+### Add the store
+
+1. In umbrelOS, open **App Store**, then **⋯ → Community App Stores**.
 2. Add `https://github.com/tgr-braiins/braiins-umbrel-apps`.
-3. Open the Braiins store and install **Braiins Manager Agent**.
-4. In [Braiins Manager](https://manager.braiins.com), add a new agent
-   (Devices → Agents → Add agent) to get an **Agent ID** and **Secret key**.
-5. Open the app on your Umbrel and paste both values. The agent starts, scans
-   your network for miners, and streams telemetry to Braiins Manager.
-6. Optional: add the app's home-screen widget (right-click the app tile →
-   Widgets) for live miner count and telemetry status on your Umbrel desktop.
+3. Open the **Braiins** store and install the apps you want.
 
-Design rationale — why the package is built the way it is — lives in
-[DECISIONS.md](DECISIONS.md). Read it before "fixing" anything that looks odd.
+### Braiins Manager Agent
 
-## Repo layout
+1. In [Braiins Manager](https://manager.braiins.com), add an agent
+   (**Devices → Agents → Add agent**) and copy its **Agent ID** and **Secret key**.
+2. Open the app on your Umbrel and paste both values. The agent starts, finds
+   the miners on your network and sends their data to Braiins Manager.
+3. Optional: add the home-screen widget (right-click the app tile → **Widgets**)
+   to see the miner count and telemetry status on the Umbrel desktop.
 
-- `umbrel-app-store.yml` — store manifest (store id `braiins`)
-- `braiins-manager-agent/` — the Braiins Manager Agent app: manifest
-  (`umbrel-app.yml`), `docker-compose.yml`, `icon.svg`
-- `image-braiins-manager-agent/` — source of the agent Docker image
-  (`ghcr.io/tgr-braiins/braiins-manager-agent`)
-- `braiins-toolbox/` — the Braiins Toolbox app
-- `image-braiins-toolbox/` — source of the Toolbox Docker image
-  (`ghcr.io/tgr-braiins/braiins-toolbox`)
-- `braiins-bitcoin-data/` — the Bitcoin Data app
-- `image-braiins-bitcoin-data/` — source of the Bitcoin Data Docker image
-  (`ghcr.io/tgr-braiins/braiins-bitcoin-data`); the app has no upstream binary — the
-  whole app is `webui.py` (run it locally with `DEMO_MODE=1` for synthetic
-  data, no node needed)
-- `CHANGELOG-braiins-manager-agent.md`, `CHANGELOG-braiins-toolbox.md`,
-  `CHANGELOG-braiins-bitcoin-data.md` — per-app release-notes history (each
-  manifest's `releaseNotes` only holds the current version)
+### Braiins Toolbox
 
-## How the Toolbox image works
+Open the app and scan your miners' IP range from the **Device List**.
+Monitoring only reads from the miners. Nothing on a miner changes until you
+start an action.
 
-`image-braiins-toolbox/` packages the official closed-source Braiins Toolbox
-binary, unmodified: the Dockerfile downloads the release tarball from the
-public feed (`https://downloads.braiins.com/braiins-toolbox/index.json`),
-verifies its sha256 against the feed's published checksum, and runs it with
-`--gui-listen-address 0.0.0.0:8888` — the Toolbox GUI is upstream's own
-embedded web server, so unlike the agent app there is no wrapper UI, no
-entrypoint script, and no glue code. The binary is statically linked; the
-Alpine base exists only for `ca-certificates` (BOS firmware downloads and
-release feed checks). All state (device list IP sources, pool presets, logs)
-lives under `$HOME`, which the image sets to the `/data` volume.
+### Bitcoin Data
 
-Build, push, and release mechanics are the same as for the agent image below
-(multi-arch buildx, public ghcr package, digest pinned in compose), and the
-release flow has the same automation twins: `toolbox-update.yml` polls the
-Toolbox feed daily and opens a ready-made bump PR, and
-`toolbox-wrapper-release.yml` ships packaging-only changes. Both drive
-`.github/scripts/bump.py` with `--app toolbox`; release-notes history lives in
-`CHANGELOG-braiins-toolbox.md`. Manual fallback: bump `TOOLBOX_VERSION` + the
-two checksums in the Dockerfile (both from the feed), rebuild/push, pin the
-new digest, bump the manifest `version`.
+Install the official **Bitcoin** app first; Bitcoin Data needs it. On first
+start it reads one block header per difficulty epoch from your node, which
+usually takes seconds. After that it keeps itself current. Two home-screen
+widgets are available: a halving countdown and current difficulty stats.
 
-One deliberate difference from the agent: Toolbox **wrapper versions are a
-revision of the current upstream version** (`26.06-1`, `26.06-2`, …), not a
-pre-release of the next patch, because Toolbox's CalVer patch releases
-(`26.06.1`) are real upstream versions we must not impersonate. See
-DECISIONS.md for the ordering rationale.
+### Updates
 
-## How the agent image works
+When a new version is released, Umbrel shows an **Update** badge on the app.
+Updating keeps your settings: Agent credentials, Toolbox IP ranges and pool
+presets, and the Bitcoin Data cache.
 
-The image does **not** build the agent from source. It downloads the official
-signed release `.deb` from the public feed
-(`https://downloads.braiins.com/braiins-manager-agent/index.json`), verifies its
-sha256, and extracts the `bma-daemon` binary. On top of that it adds:
+---
 
-- `image-braiins-manager-agent/webui.py` — stdlib-only Python on :8080: the config page where the
-  user enters the Agent ID / Secret key (written to `/data/daemon.yaml`, mode
-  0600), `/status` (JSON for the page's live stats — miner count and telemetry
-  activity parsed from the daemon log), and `/widgets/status` (Umbrel
-  home-screen widget)
-- `image-braiins-manager-agent/entrypoint.sh` — supervisor that starts the daemon once the config
-  exists and restarts it when the config changes; the daemon log is kept as a
-  real file for the stats parsing, mirrored to `docker logs`, size-capped
+## For maintainers
 
-Credentials persist in the Umbrel app-data volume across app updates and are
-removed on uninstall.
+Read [DECISIONS.md](DECISIONS.md) before you change how an app is packaged.
+It explains the choices that look odd at first sight.
 
-## Developing
+### Repo layout
 
-### Build and smoke-test locally
+Every app has two folders and a changelog:
+
+| Path | Content |
+|---|---|
+| `<app-id>/` | The Umbrel package: `umbrel-app.yml`, `docker-compose.yml`, `icon.svg`, `gallery/`, `data/.gitkeep` |
+| `image-<app-id>/` | Source of the app's Docker image, published as `ghcr.io/tgr-braiins/<app-id>` |
+| `CHANGELOG-<app-id>.md` | Release notes of all versions. The manifest's `releaseNotes` holds only the current one. |
+
+Other files:
+
+- `umbrel-app-store.yml`: the store manifest. The store id is `braiins`, so
+  every app id must start with `braiins-` (see DECISIONS.md).
+- `.github/scripts/bump.py`: checks release feeds, bumps versions, writes
+  changelogs and pins image digests. All workflows use it.
+- `.github/workflows/`: update and release workflows (see [Releases](#releases)).
+
+### How each image is built
+
+All images are multi-arch (`linux/amd64` and `linux/arm64`), based on Alpine,
+run as uid 1000 and keep their state in `/data`.
+
+- **Manager Agent** (`image-braiins-manager-agent/`). It downloads the official
+  `.deb` from the public feed (`downloads.braiins.com/braiins-manager-agent/index.json`),
+  checks its sha256 and extracts the static `bma-daemon` binary. The agent has
+  no user interface, so two files are added:
+  - `webui.py`: a stdlib-only Python page on :8080 where the user enters the
+    Agent ID and Secret key (saved to `/data/daemon.yaml`, mode 0600). It also
+    serves `/status` for the page and `/widgets/status` for the home-screen widget.
+  - `entrypoint.sh`: starts the daemon once the credentials exist, restarts it
+    when they change, and restarts the web page if it stops.
+- **Toolbox** (`image-braiins-toolbox/`). It downloads the official tarball from
+  `downloads.braiins.com/braiins-toolbox/index.json`, checks its sha256 and runs
+  the binary as it is, with `--gui-listen-address 0.0.0.0:8888`. Toolbox
+  serves its own web interface, so there is no extra code. `HOME=/data` keeps
+  all of its state on the volume.
+- **Bitcoin Data** (`image-braiins-bitcoin-data/`). There is no upstream binary.
+  The whole app is `webui.py` (stdlib-only Python) plus the Braiins Sans fonts.
+  It reads the node through the RPC settings the official Bitcoin app exports.
+  Run it locally with `DEMO_MODE=1` to get synthetic data without a node.
+
+### Releases
+
+Every release arrives as a pull request. The workflow builds the image,
+smoke-tests it, pushes it to GHCR and pins its digest in `docker-compose.yml`
+before it opens the PR. A maintainer reviews and merges it.
+
+| App | New upstream version | Packaging-only change | Version scheme |
+|---|---|---|---|
+| Manager Agent | `agent-update.yml`, daily | `wrapper-release.yml`, manual | Upstream version. Packaging releases use the next patch with a suffix: `4.15.1-1` |
+| Toolbox | `toolbox-update.yml`, daily | `toolbox-wrapper-release.yml`, manual | Upstream version. Packaging releases add a revision: `26.09-1` |
+| Bitcoin Data | (no upstream) | `braiins-bitcoin-data-release.yml`, manual | Plain semver: `1.13.1` |
+
+- **Daily checks.** If several upstream versions ship before a bump PR is
+  merged, the newest PR closes the older ones. Its changelog has an entry for
+  every skipped version, so merging only the newest PR loses nothing.
+- **Manual releases.** Start them from the **Actions** tab. Give a `version` to
+  bump the manifest: existing installs then get the Update badge. Leave it empty
+  to only rebuild and re-pin the image at the same version: new installs get the
+  new image, existing installs get no badge. DECISIONS.md explains why the
+  version schemes differ.
+- **After merging.** Umbrel devices pick the change up at the next store refresh.
+
+To release by hand, do what the workflows do:
+
+1. Bump the version and the per-arch checksums in `image-<app-id>/Dockerfile`.
+2. Build and push the multi-arch image:
+   ```bash
+   docker buildx build --platform linux/amd64,linux/arm64 --provenance=false \
+     --tag ghcr.io/tgr-braiins/<app-id>:<version> --push image-<app-id>/
+   ```
+3. Pin the index digest in `docker-compose.yml` as `<tag>@sha256:…`
+   (`docker buildx imagetools inspect ghcr.io/tgr-braiins/<app-id>:<version>`).
+4. Bump `version` and `releaseNotes` in `umbrel-app.yml`, add a changelog
+   entry, and open a PR.
+
+Push the image before you merge the version bump. Umbrel always pulls the
+image from the registry on install or update, so a missing image makes the
+install fail. The GHCR packages must stay public.
+
+### Build and test locally
+
+Example with the Manager Agent; the others work the same way.
 
 ```bash
 cd image-braiins-manager-agent
-docker build -t bma-umbrel-dev .          # plain build gives amd64 (TARGETARCH defaults); use buildx for arm64
-docker run -d --name bma-dev --user 1000:1000 --init -p 18080:8080 -v bma-dev-data:/data bma-umbrel-dev  # mirror prod: unprivileged uid
-curl http://localhost:18080/status         # {"configured": false, "running": false}
+docker build -t bma-dev .     # amd64; use buildx for arm64
+docker run -d --name bma-dev --user 1000:1000 --init -p 18080:8080 -v bma-dev-data:/data bma-dev
+curl http://localhost:18080/status   # {"configured": false, "running": false}
 ```
 
-Open http://localhost:18080, paste test credentials from Braiins Manager
-(Devices → Agents → Add agent) — the status pill should turn "Agent running"
-within ~10 s and `docker logs bma-dev` should show the daemon polling.
-Changing credentials in the UI must restart the daemon (new PID).
+Open http://localhost:18080 and paste test credentials from Braiins Manager.
+The status should change to "Agent running" within about 10 seconds. Saving
+new credentials must restart the daemon. Clean up with
+`docker rm -f bma-dev && docker volume rm bma-dev-data`.
 
-Cleanup: `docker rm -f bma-dev && docker volume rm bma-dev-data`.
-
-### Push a new image version to ghcr
-
-The package lives at `ghcr.io/tgr-braiins/braiins-manager-agent` and **must stay
-public** (umbreld pulls anonymously). You need a GitHub PAT with
-`write:packages` for an account with access to the package:
-
-```bash
-echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
-cd image-braiins-manager-agent
-docker buildx create --use                 # once; QEMU needed for arm64 on x86 hosts:
-docker run --privileged --rm tonistiigi/binfmt --install arm64
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  --provenance=false \
-  --tag ghcr.io/tgr-braiins/braiins-manager-agent:<version> \
-  --push .
-# --provenance=false skips BuildKit attestation manifests, which ghcr's UI
-# confusingly lists as an extra "unknown/unknown" architecture
-```
-
-Use the upstream agent version from `umbrel-app.yml` as the tag (e.g. `4.10.0`), then pin the index digest in `docker-compose.yml`.
-The GitHub workflows in `.github/workflows/` automate exactly this (see "Release flow").
-
-### Test on a real Umbrel
-
-Add this repo as a community app store (App Store → ⋯ → Community App Stores)
-and install the app. To iterate without waiting for the store's periodic git
-refresh, SSH in (`ssh umbrel@umbrel.local`, dashboard password) and run:
-
-```bash
-cd umbrel/app-stores/<this-store-dir> && git pull
-umbreld client apps.update.mutate --appId braiins-manager-agent
-# state check:
-umbreld client apps.state.query --appId braiins-manager-agent
-# container logs (needs sudo):
-sudo docker logs braiins-manager-agent_web_1
-```
-
-An app install/update **always pulls the image from ghcr** — push the image
-before bumping the compose tag, or the install fails.
-
-## Release flow
-
-This section describes the **agent** flow; the Toolbox app has identical
-twin workflows (`toolbox-update.yml`, `toolbox-wrapper-release.yml`) driving
-the same `bump.py` with `--app toolbox` — see "How the Toolbox image works"
-above for the one versioning difference.
-
-Automated: `.github/workflows/agent-update.yml` polls the release feed daily
-and opens a ready-made bump PR (image built, smoke-tested, pushed, digest
-pinned) — a maintainer reviews and merges. It performs exactly the manual
-steps below; the manual flow remains the fallback and the source of truth.
-If several upstream versions ship before a bump PR is merged, the newest bump
-PR closes the older ones and its changelog carries an entry for every skipped
-version (dated with the feed's release date), so merging only the newest PR
-loses nothing.
-
-1. New agent version is published to the public download feed.
-2. Bump `BMA_VERSION` and the per-arch `.deb` checksums in `image-braiins-manager-agent/Dockerfile`.
-3. Build + push the multi-arch image, tagged with the upstream agent version:
-   `docker buildx build --platform linux/amd64,linux/arm64 --tag <registry>/braiins-manager-agent:<X.Y.Z> --push image-braiins-manager-agent/`
-4. Pin the **multi-arch index digest** in `docker-compose.yml`
-   (`tag@sha256:…` — get it from `docker buildx imagetools inspect <image>:<tag>`),
-   bump `version` in `umbrel-app.yml`, push this repo.
-5. Umbrel shows an "Update" badge to users; updating pulls the new image and
-   recreates the containers, keeping the configured credentials.
-
-### Wrapper-only release (no new agent version)
-
-Changes to this repo that don't correspond to a new agent release (the web UI,
-entrypoint, widget, docs) never ship through `agent-update.yml` — it only fires
-when upstream publishes a newer agent. Ship them with the manual
-`.github/workflows/wrapper-release.yml` (Actions tab → **wrapper-release** →
-Run workflow). It rebuilds `image-braiins-manager-agent/` (agent binary unchanged), smoke-tests,
-pushes, pins the new digest, and opens a PR — same review gate as the automated
-flow. Two modes, chosen by the `version` input:
-
-- **Give a version** (e.g. `4.11.1-1`) → the manifest `version` + `releaseNotes`
-  are bumped and a `CHANGELOG-braiins-manager-agent.md` entry is added, so **existing** installs get an
-  Update badge. umbrelOS keys the badge off the manifest `version`, so it must
-  increase; a pre-release suffix on the next patch (`4.11.1-1`, `4.11.1-2`, …)
-  sorts above the current agent version but below a real upstream `4.11.1`, so
-  upstream always wins when it lands.
-- **Leave it empty** → digest-only re-pin at the current version. New installs
-  pull the rebuilt image; existing installs get **no** badge (version unchanged).
-  Force it onto a test device with
-  `umbreld client apps.update.mutate --appId braiins-manager-agent`.
-
-## Compliance with the official Umbrel App Store
-
-**Read this before changing the package.** The package deliberately follows the
-official packaging contract from
-[getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps) — that repo's
-`AGENTS.md` / `CLAUDE.md` point to repo-local skills in `.claude/skills/`
-(`umbrel-package-app`, `umbrel-update-app`, `umbrel-test-app`) which are the
-authoritative, reviewed packaging rules. If you work on this package with a
-coding agent, have it read those first. Highlights this package implements:
-
-- images multi-arch (`linux/amd64` + `linux/arm64`), publicly pullable,
-  pinned as `tag@sha256:<index digest>`
-- headless upstream fronted by a setup/status web page behind `app_proxy` —
-  no SSH/CLI needed for normal use
-- runs unprivileged (`user: "1000:1000"`, `init: true`); no host mounts,
-  host networking, or Docker socket
-- user state under `${APP_DATA_DIR}/data` (bind-mount source committed as
-  `data/.gitkeep`); manifest `version` is the upstream agent version
-- home-screen widget (`widgets:`) backed by `web:8080/widgets/status`
-
-Validate any change with the official linter (checks manifest shape, port
-uniqueness, image pinning/multi-arch, compose wiring):
+Check every package change with the official Umbrel linter:
 
 ```bash
 git clone --depth 1 https://github.com/getumbrel/umbrel-apps /tmp/umbrel-apps
-cp -r braiins-manager-agent /tmp/umbrel-apps/
-cd /tmp/umbrel-apps && npm ci && npm run lint:apps -- braiins-manager-agent --check-images
+cp -r <app-id> /tmp/umbrel-apps/
+cd /tmp/umbrel-apps && npm ci && npm run lint:apps -- <app-id> --check-images
 ```
 
-Known intentional deviations (community store vs. official submission):
+The linter reports errors for the empty `submission` field, and a warning for
+the committed icon and gallery. Both are expected in a community store; see
+[Path to the official App Store](#path-to-the-official-app-store).
 
-- `icon` + committed `icon.svg` / `gallery/` — required here (community stores
-  serve assets from the repo); for an official-store PR these are removed and
-  screenshots/logo go in the PR body (Umbrel hosts final assets).
-- `submission: ""` — becomes the PR URL at official submission time.
+### Test on a real Umbrel
+
+Add this store on the device and install the app. To test a change without
+waiting for the store refresh, SSH in (`ssh umbrel@umbrel.local`, with the
+dashboard password) and run:
+
+```bash
+cd ~/umbrel/app-stores/<this-store-dir> && git pull
+umbreld client apps.update.mutate --appId <app-id>
+umbreld client apps.state.query --appId <app-id>
+sudo docker logs <app-id>_web_1
+```
+
+To test an image that isn't on GHCR yet, build it on the Umbrel, push it to a
+local registry (`registry:2` on `127.0.0.1:5000`) and point the compose file at
+`localhost:5000/<app-id>:<tag>`. umbreld ignores locally built images and
+`pull_policy`, but it pulls from a local registry. The store folder is
+replaced at the next store refresh after a push to `main`, so edits made there
+by hand don't last.
+
+### Umbrel platform rules learned on real hardware
+
+- The manifest `port` is a fixed host-port claim, with no conflict detection
+  and no fallback. 4547–4549 are taken by this store; never change a released
+  app's port.
+- Community-store app ids must start with the store id (`braiins-`), or the
+  app never appears in the store, and nothing is logged.
+- The Update badge appears when the manifest `version` string changes. Nothing
+  else, such as a new image digest, triggers it.
+- The dashboard blocks `data:` URIs, so `icon` must be an https URL.
+- Bridge networking is enough. The agent and Toolbox find miners by TCP scans
+  of IP ranges.
+- umbreld ignores Docker health checks. Home-screen widgets are the only
+  native place to show live status.
 
 ### Path to the official App Store
 
-The submission checklist, per app. Process: fork
-[getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps), add the app
-directory, pass their linter clean, open the PR, iterate with reviewers;
-post-acceptance, app updates are PRs to their repo (our bump workflows need a
-variant targeting it).
+The plan is to submit the apps to
+[getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps). Its
+`.claude/skills/` (`umbrel-package-app`, `umbrel-update-app`,
+`umbrel-test-app`) hold the official packaging rules; read them before you
+change a package. Once an app is accepted, updates become PRs to their repo,
+so the workflows will need a variant that targets it.
 
-Infrastructure first (once):
+Infrastructure, once:
 
-1. Move this repo and both ghcr images to a Braiins-owned org/registry
-   (`# TODO` markers in both compose files); update `REGISTRY_OWNER` in the
-   workflows; keep packages public and digest-pinned.
+1. Move this repo and the GHCR images to a Braiins-owned organization (see the
+   `# TODO` lines in the compose files) and update `REGISTRY_OWNER` in the
+   workflows. Keep the packages public and digest-pinned.
+2. Start releases from the Braiins release pipelines (`repository_dispatch`)
+   instead of daily polling.
 
-Package changes for the submission PR:
+For each app's submission PR:
 
-2. Remove committed `icon.svg` + `gallery/`; drop manifest `icon:` and set
-   `gallery: []` (assets go in the PR body).
-3. Set `submission:` to the actual PR URL — this clears the two standing
-   linter errors.
-4. Re-verify ports 4547/4548 are still unclaimed in the official store at
-   submission time (static claims, no conflict detection).
-5. Retire (or re-id) the community listing when the official app lands: the
-   app ids are already official-store-shaped, and umbrel keys available apps
-   by id — a user with both stores added would get a collision.
+3. Remove the committed `icon.svg` and `gallery/`, drop the manifest `icon:`
+   and set `gallery: []`. The logo and screenshots go in the PR body.
+4. Set `submission:` to the PR URL. This clears the expected linter errors.
+5. Check again that the app's port is still free in the official store.
+6. Retire or rename the community listing when the official app is live. Both
+   stores use the same app ids, so a user with both stores would get a conflict.
+7. Collect the evidence the reviewers expect (see `umbrel-test-app`): a fresh
+   install on stated hardware, **including arm64, which is not tested yet**,
+   restart and persistence, the main workflow, and screenshots.
 
-Evidence the review expects (see the `umbrel-test-app` skill):
+Questions to expect in review:
 
-6. Fresh install through Umbrel on stated hardware, **including an arm64
-   runtime test** (currently untested), restart + persistence, the main
-   workflow exercised, screenshots + logo attached to the PR body.
-
-Known review friction — have answers ready:
-
-7. Closed-source binaries: official signed artifacts from the public feed,
-   sha256-verified in the Dockerfile, image rebuildable by anyone from public
-   artifacts (see DECISIONS.md).
-8. Unauthenticated `web:` ports on the shared Docker network (accepted-risk
-   entries in DECISIONS.md): the durable fixes are product-level — a GUI auth
-   option in Toolbox, a secret-key-overwrite guard in the agent — and should
-   ideally ship before or alongside official submission.
-
-## Notes for developers picking this up
-
-- **Umbrel constraints** (learned by testing on real hardware):
-  - umbreld force-pulls images on install/update — the image must be publicly
-    pullable; `pull_policy` is ignored.
-  - The manifest `port` (currently **4547**) is a static host-port claim.
-    There is no conflict detection or fallback in the platform.
-  - The dashboard CSP (`img-src * blob:`) blocks `data:` URIs — the manifest
-    `icon` must be an http(s) URL.
-  - Bridge networking is sufficient; miner discovery is range-based TCP
-    scanning, no host networking needed.
-- **TODO before GA**: see "Path to the official App Store" above for the full
-  submission checklist; independent of it, wire the image builds + version
-  bumps into the Braiins release pipelines (event-driven `repository_dispatch`
-  instead of daily polling).
+8. **Closed-source binaries.** The agent and Toolbox images use official
+   signed artifacts from the public feed, checked by sha256. Anyone can
+   rebuild them from public files.
+9. **Web ports without login on the shared Docker network.** This is an accepted
+   risk, described in DECISIONS.md. The real fixes are in the products: a login
+   option in Toolbox and a guard against overwriting the agent's Secret key.
+   Ideally they ship before submission.
