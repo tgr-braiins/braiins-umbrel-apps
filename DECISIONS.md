@@ -77,12 +77,28 @@ The Alpine base image is pinned by digest too, and Dependabot proposes
 updates. Without the pin, a rebuild of the same version could silently pick up
 a different base.
 
-## `--provenance=false` on buildx
+## Provenance: GitHub attestations, not BuildKit's
 
-BuildKit attaches provenance attestation manifests by default, and the GHCR UI
-lists them as a confusing `unknown/unknown` architecture. We turn them off so
-the package page stays readable. If supply-chain attestation becomes a
-requirement, turn them back on deliberately and document the GHCR UI artifact.
+Users need a way to tell our images from a copy that claims to be Braiins.
+The release workflow signs a SLSA build provenance attestation for each
+pushed index digest with `actions/attest-build-provenance` (keyless, through
+GitHub's OIDC token and Sigstore), then verifies it with
+`gh attestation verify`. The README shows users the same command.
+
+The attestation lives in GitHub's attestation store (`push-to-registry:
+false`). `gh attestation verify oci://…` finds it by digest, so nothing extra
+is pushed to GHCR.
+
+BuildKit's own provenance stays off (`--provenance=false`): it adds manifests
+to the image index that the GHCR UI lists as an `unknown/unknown`
+architecture, and nothing checks them.
+
+What this proves: the image was built by `_release.yml` in this repo from a
+named commit. It does not prove that the repo belongs to Braiins. Today it is
+under a personal account, so the trust anchor is only as strong as that
+account. Moving the repo and packages to the Braiins GitHub org, with a
+verified domain and the store URL published on braiins.com, fixes that. The
+attestation's `--repo` and `--signer-workflow` then change to the org path.
 
 ## The Update badge only looks at the version string
 
