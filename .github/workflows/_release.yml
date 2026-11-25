@@ -6,7 +6,8 @@
 #                          files; the feed is untrusted, so this job can't
 #                          write anything. The edits go on as a patch.
 #   image    packages      build, smoke-test, push, smoke-test the pushed
-#                          digest. The digest comes from the build itself.
+#            attestations  digest, sign a build attestation for it and verify
+#                          it. The digest comes from the build itself.
 #   pr       contents/PRs  pin the digest, open the PR, close superseded bump
 #                          PRs. GitHub holds CI on a PR opened by this
 #                          workflow until a maintainer approves the run.
@@ -134,6 +135,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write       # Sigstore signing identity for the attestation
+      attestations: write
     outputs:
       digest: ${{ steps.push.outputs.digest }}
     env:
@@ -190,6 +193,26 @@ jobs:
           docker pull --platform linux/amd64 "$IMAGE@${{ steps.push.outputs.digest }}"
           sh "$DIR/smoke.sh" "$IMAGE@${{ steps.push.outputs.digest }}"
 
+      # Signed SLSA build provenance for the index digest: anyone can check
+      # that the image was built by this workflow, in this repo, from this
+      # commit. Stored in GitHub's attestation store, not pushed to GHCR, so
+      # the package page stays as it is (see DECISIONS.md).
+      - name: Attest the build
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: false
+
+      - name: Verify the attestation the way a user would
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          gh attestation verify "oci://$IMAGE@$DIGEST" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/_release.yml"
+
   pr:
     needs: [prepare, image]
     runs-on: ubuntu-24.04
@@ -230,6 +253,7 @@ jobs:
             - image built from `image-${{ inputs.app_id }}/` and smoke-tested before publishing
             - multi-arch image pushed as `ghcr.io/${{ github.repository_owner }}/${{ inputs.app_id }}:${{ needs.prepare.outputs.version }}`
             - the pushed digest pulled back and smoke-tested, then pinned in `docker-compose.yml`: `${{ needs.image.outputs.digest }}`
+            - signed build provenance attested for that digest and verified (`gh attestation verify`, see the README)
             ${{ needs.prepare.outputs.bumped == 'true' && '- manifest `version` and `releaseNotes` updated and a changelog entry added: existing installs get the Update badge' || '- manifest `version` unchanged (digest-only re-pin): only new installs get this image' }}
 
             Before merging:

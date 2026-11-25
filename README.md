@@ -48,6 +48,26 @@ When a new version is released, Umbrel shows an **Update** badge on the app.
 Updating keeps your settings: Agent credentials, Toolbox IP ranges and pool
 presets, and the Bitcoin Data cache.
 
+### Check that an image is the real one
+
+Every image released from this repo carries a signed build attestation: a
+record, signed through GitHub and Sigstore, of which repository, workflow and
+commit built it. With the [GitHub CLI](https://cli.github.com), take the image
+reference from the app's `docker-compose.yml` (the part after `image:`) and run:
+
+```sh
+gh attestation verify \
+  oci://ghcr.io/tgr-braiins/braiins-manager-agent@sha256:<digest> \
+  --repo tgr-braiins/braiins-umbrel-apps \
+  --signer-workflow tgr-braiins/braiins-umbrel-apps/.github/workflows/_release.yml
+```
+
+`Verification succeeded!` means the image was built by this repo's release
+workflow, and the output names the commit. An image from anywhere else fails.
+The Braiins binaries inside are downloaded from `downloads.braiins.com` and
+checked against the sha256 in the official release feed during the build.
+Images released before November 2026 have no attestation.
+
 ---
 
 ## For maintainers
@@ -136,7 +156,9 @@ release workflows, does the work in three jobs with separate permissions:
 2. **image** (can push packages): builds the image, runs `smoke.sh`, pushes the
    multi-arch image, then pulls the pushed digest back and runs `smoke.sh` on
    it. The digest comes from the build itself, so the PR pins exactly what was
-   tested.
+   tested. Last, it signs a build provenance attestation for that digest
+   (`actions/attest-build-provenance`) and verifies it with
+   `gh attestation verify`, as a user would.
 3. **pr** (can open PRs): pins the digest, opens the PR and closes superseded
    bump PRs. Approve the held CI run on the PR, then merge once `ci-ok` passes.
 

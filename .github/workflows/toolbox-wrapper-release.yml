@@ -31,6 +31,8 @@ jobs:
       contents: write
       pull-requests: write
       packages: write
+      id-token: write      # signs the build attestation (Sigstore)
+      attestations: write
     uses: ./.github/workflows/_release.yml
     with:
       app: toolbox
