@@ -479,11 +479,14 @@ one-command install, a self-updating service and a password-protected web
 interface. None of that applies on Umbrel, so the first package has its own
 notes. Later versions take the feed description, like Toolbox.
 
-## The certificate in the binary has a lifetime
+## The built-in certificate renews itself
 
-The proxy logs "Certificate is valid for N days" at start (36 days for 0.1.1
-on 2026-11-25) and exports `remaining_certificate_validity_days` on
-`/metrics`. The release candidates had the same. If an installed proxy stops
-connecting to the pool around that date, check this first, and whether a
-newer release is out.
-
+The proxy identifies itself to Braiins' license service
+(`license.braiins.com`) with a client certificate built into the binary. At
+start it logs "Certificate is valid for N days" (36 days for 0.1.1 on
+2026-11-25, i.e. until 1 January 2027), and `/metrics` exports
+`remaining_certificate_validity_days` and `cert_refresh_total`. The
+certificate is renewed automatically while the proxy runs (confirmed November 2026),
+so the date in the log is not an end of life and needs no
+release from us. If the proxy ever logs "Certificate expired", check that it
+can reach Braiins (outbound HTTPS) before anything else.
