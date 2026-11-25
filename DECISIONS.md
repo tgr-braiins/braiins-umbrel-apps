@@ -61,7 +61,8 @@ taken. The store uses a block: 4547 agent, 4548 Toolbox, 4549 Bitcoin Data,
 each checked free in the official store when it was claimed. The compose
 `APP_PORT` is the container-internal port and can never conflict. **Never
 change a released app's port**: users' bookmarks and the app URL depend on it.
-Official-store review checks the port again at submission.
+The official linter now checks a new app's ports against the whole official
+store.
 
 ## Images: multi-arch, public, pinned by index digest
 
@@ -69,6 +70,12 @@ Images are built for `linux/amd64` and `linux/arm64` and pushed to public GHCR
 packages, because umbreld pulls anonymously and always pulls on install and
 update (`pull_policy` is ignored). Compose pins the multi-arch index digest
 (`tag@sha256:…`), so installs are reproducible even if a tag is overwritten.
+The release workflow takes that digest from the build's own metadata, after
+the pushed image has passed the smoke test, never by looking the tag up later.
+
+The Alpine base image is pinned by digest too, and Dependabot proposes
+updates. Without the pin, a rebuild of the same version could silently pick up
+a different base.
 
 ## `--provenance=false` on buildx
 
@@ -91,6 +98,9 @@ only decides when to re-pull the *store*. Consequences:
 - Version ordering matters only inside our own `bump.py`, when the daily check
   asks whether the feed is newer than the manifest. The per-app schemes below
   exist to keep that answer right.
+- These schemes are for this community store. The official store uses
+  `-patch.N` for packaging-only releases and requires a version bump for every
+  image change (README, "Path to the official App Store").
 
 ## Updates only through Umbrel, never self-update
 
