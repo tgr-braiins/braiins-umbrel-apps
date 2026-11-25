@@ -1,339 +1,337 @@
 # Design decisions
 
-Short rationale for everything that might otherwise earn a "wtf, why?".
-Format: what we did → why → when to revisit.
+The reasons behind anything here that might otherwise earn a "wtf, why?".
+Each entry says what we did, why, and when to revisit it.
 
-Sections below cover the **Braiins Manager Agent** package unless titled
-otherwise; **Braiins Toolbox** decisions are at the end.
+The first part applies to every app in the store. The app-specific decisions
+follow: [Manager Agent](#braiins-manager-agent),
+[Toolbox](#braiins-toolbox), [Bitcoin Data](#bitcoin-data).
 
-## Packaging from the release `.deb`, not from source
+---
 
-The image downloads the official signed `.deb` from the public feed and
-extracts `bma-daemon`. The `.deb` is the official distribution artifact —
-signed, checksummed, published for both x86_64 and aarch64 — so anyone can
-rebuild this image from public artifacts alone. Corollary: this repo never
-contains agent code or patches. If Umbrel support needs the agent to behave
-differently (e.g. the local status API mentioned below), that change is made
-in the agent product and reaches this package through the next release.
+# All apps
 
-## The daemon binary is statically linked → Alpine base
+## App ids start with `braiins-`
 
-`bma-daemon` ships statically linked — zero runtime library dependencies.
-The base image exists solely to run `webui.py`, so Alpine + python3 (~83 MB
-total) replaced Debian slim (156 MB). Don't add glibc-dependent tooling to the
-image; if something needs glibc, check whether it's actually needed at all.
+umbreld silently drops community-store apps whose id doesn't start with the
+store id (`app-repository.ts`: `app.id.startsWith(meta.id)`; our store id is
+`braiins`). The app is cloned onto the device but never appears in the store
+UI, and nothing is logged. Bitcoin Data 1.0.0 first shipped as `bitcoin-data`
+and hit exactly this. Display names are free ("Bitcoin Data").
 
-## Hand-rolled stdlib-only web UI (`webui.py`)
+## Official artifacts only, never source or patches
 
-Upstream is headless; the Umbrel App Store requires browser-first setup (no
-SSH/CLI for normal use). A single ~300-line Python file with no framework keeps
-the image small, the attack surface minimal, and the dependency count at zero.
+The agent and Toolbox images download the official signed release files from
+the public feeds on `downloads.braiins.com` and check their sha256 in the
+Dockerfile. Anyone can rebuild the images from public files alone, and this
+repo never contains product code or patches. If Umbrel needs a product to
+behave differently (for example a local status endpoint), the change is made
+in the product and reaches this store with its next release.
+
+## Static binaries → Alpine base
+
+`bma-daemon` and the Toolbox binary are statically linked. The base image only
+provides `ca-certificates` and, where a web page is ours, `python3`. Alpine
+replaced Debian slim (the agent image went from 156 MB to about 83 MB). Don't
+add glibc-dependent tools; if something needs glibc, check first whether it is
+needed at all.
+
+## Stdlib-only Python for our own web pages
+
+Where we write the web page ourselves (the agent setup page, all of Bitcoin
+Data), it is one Python file with no framework and no dependencies, served by
+the app container. This keeps images small and the attack surface minimal.
 Deliberately not a JS app, not Flask, not a separate UI container.
 
-## Agent stats come from parsing the daemon log (known hack)
+## Fixed ports 4547–4549
 
-The daemon exposes no local status API. Miner count, telemetry activity, and
-error surfacing (UI + home-screen widget) are regex-parsed from the tail of
-`/var/log/bma.log` (`N miners polled`, `batch sent items=`, `WARN/ERROR`
-lines). This is the most brittle part of the package: a daemon logging change
-silently degrades stats to "—" (the app otherwise keeps working). The right fix
-is a local status endpoint in the daemon itself — requested upstream. Replace
-the parsing the moment that exists.
+Umbrel's manifest `port` is a fixed host-port claim, with no conflict detection
+or fallback anywhere in the platform: an install simply fails if the port is
+taken. The store uses a block: 4547 agent, 4548 Toolbox, 4549 Bitcoin Data,
+each checked free in the official store when it was claimed. The compose
+`APP_PORT` is the container-internal port and can never conflict. **Never
+change a released app's port**: users' bookmarks and the app URL depend on it.
+Official-store review checks the port again at submission.
 
-## Daemon log is a real file mirrored to stdout
+## Images: multi-arch, public, pinned by index digest
 
-The daemon writes `/var/log/bma.log` (hardcoded path). Earlier versions
-symlinked it to stdout; now it's a real file so the web UI can parse it, with
-`tail -F` mirroring to `docker logs` and a 50 MB truncation cap in the
-entrypoint loop (no logrotate in the container). The file is pre-created in the
-image owned by uid 1000 because `/var/log` itself isn't writable for an
-unprivileged user.
+Images are built for `linux/amd64` and `linux/arm64` and pushed to public GHCR
+packages, because umbreld pulls anonymously and always pulls on install and
+update (`pull_policy` is ignored). Compose pins the multi-arch index digest
+(`tag@sha256:…`), so installs are reproducible even if a tag is overwritten.
 
-## Entrypoint is a supervisor loop, not just `exec`
+## `--provenance=false` on buildx
 
-Saving credentials must restart the daemon without restarting the container
-(container restart would drop the web UI mid-interaction and needlessly bounce
-app_proxy's target). Docker can't watch files, so the entrypoint polls the
-config mtime every 5 s, (re)starts `bma-daemon`, and restarts it on change.
-`init: true` in compose provides PID 1 signal handling above it.
+BuildKit attaches provenance attestation manifests by default, and the GHCR UI
+lists them as a confusing `unknown/unknown` architecture. We turn them off so
+the package page stays readable. If supply-chain attestation becomes a
+requirement, turn them back on deliberately and document the GHCR UI artifact.
+
+## The Update badge only looks at the version string
+
+umbrelOS shows the Update badge when the store's manifest `version` differs
+from the installed one (`ui/src/hooks/use-apps-with-updates.ts`:
+`availableApp.version !== app.version`). There is no ordering, no semver and
+no digest or content comparison; the git-commit check in `app-repository.ts`
+only decides when to re-pull the *store*. Consequences:
+
+- A packaging change that keeps `version` reaches new installs only. That is
+  why every manual release workflow has two modes: bump the version (existing
+  installs get the badge) or re-pin the digest at the same version.
+- Version ordering matters only inside our own `bump.py`, when the daily check
+  asks whether the feed is newer than the manifest. The per-app schemes below
+  exist to keep that answer right.
+
+## Updates only through Umbrel, never self-update
+
+The agent's and Toolbox's own update mechanisms can't apply inside the
+container (no dpkg or systemd; the Toolbox binary is owned by root while the
+process runs as uid 1000). This is by design: updates come only as Umbrel app
+updates with a new image and version, and `/data` persists across them.
+
+## Icon and gallery are committed files with https URLs (community store only)
+
+The dashboard CSP is `img-src * blob:`, and in CSP `*` excludes `data:` URIs,
+so inline icons silently fall back to a placeholder. A community store serves
+its assets from the repo through raw.githubusercontent URLs. For an
+official-store submission these files and the manifest `icon`/`gallery`
+entries are removed: Umbrel's team creates and hosts official assets, and
+screenshots go in the PR body. Their linter warns about committed assets for
+this reason.
+
+## Widgets, not Docker health checks
+
+umbreld ignores Docker health status; app state follows the app lifecycle
+(checked in the umbreld source). The `widgets:` mechanism is the only native
+place to show live status: umbrelOS fetches `web:8080/widgets/<id>` itself
+(no auth, no app_proxy) and renders the JSON on the home screen. A
+HEALTHCHECK would only improve `docker ps` output for support.
+
+Widget icons are [Tabler Icons](https://tabler.io/icons) slugs, not our own
+SVGs. umbrelOS copies `@tabler/icons` **2.39.0** to
+`/generated-tabler-icons/<slug>.svg`, plus four built-in `system-widget-*`
+icons. An unknown slug renders as an empty box, so a slug must exist *in
+2.39.0*, not just in today's Tabler set. A `three-stats` item is
+`{icon, text, subtext}`: there is **no `title` field** (an early agent version
+set `title`, which never rendered). `text` is the emphasized value, `subtext`
+the muted caption.
+
+Widget-bearing apps declare `manifestVersion: 1.1`, the version that
+introduced widgets; with `1`, older umbrelOS versions would install the app
+with a broken widget. Toolbox has no widget and stays on `1`.
+
+## No hooks
+
+Nothing here needs lifecycle scripts. Installs get `data/` from the committed
+package (owned by uid 1000 via umbreld), configuration is written by the app at
+run time, and there are no migrations. Add hooks only for real migrations of
+existing installs (see the official `umbrel-package-app` skill for hook
+semantics), not for anything compose or the package can express.
+
+## Web pages without login on the shared Docker network (accepted risk)
+
+Each app's `web` port has no login of its own. app_proxy protects only the
+browser path, so a malicious app installed on the same Umbrel could call the
+ports directly. Umbrel's threat model treats apps on one device as mutually
+trusted, so this is accepted today. The risk differs per app (see below); the
+right fixes are in the products. Don't "fix" it here by publishing raw ports
+or turning off app_proxy auth: both only widen exposure.
+
+## Styling: Braiins CDS v11 tokens, fonts served locally
+
+Our own pages use Braiins CDS v11 (IBM Carbon v11) color, type and spacing
+token values, written inline in `webui.py`; there is no CSS framework.
+Semantic tokens switch between the White and Gray 90 themes with
+`prefers-color-scheme`. The primary action and focus ring are violet-60
+(brand), a deliberate override of the token file's blue-60; links keep the CDS
+blue link tokens. Braiins Sans (regular and bold WOFF2, converted from the
+public visualbook OTFs at design.braiins.com/braiins/typography) is committed
+in each image folder's `fonts/`, baked into the image and served by `webui.py`
+itself. An Umbrel box must not depend on a Braiins web host to render a local
+page, and calling an external CDN from a self-hosted node is exactly what
+Umbrel users install apps to avoid. Revisit if the visualbook adds a semibold
+(Carbon's 600-weight styles currently resolve to bold) or the token values
+change.
+
+---
+
+# Braiins Manager Agent
+
+## Our setup page in front of a headless daemon
+
+The agent has no user interface, and the Umbrel App Store requires setup in
+the browser (no SSH or CLI for normal use). `webui.py` provides the page where
+the user enters the Agent ID and Secret key.
+
+## Stats come from parsing the daemon log (known hack)
+
+The daemon has no local status API. The miner count, telemetry activity and
+errors shown on the page and in the widget are parsed with regexes from the
+tail of `/var/log/bma.log` (`N miners polled`, `batch sent items=`,
+`WARN`/`ERROR` lines). This is the most brittle part of the package: a change
+to the daemon's log lines silently turns the stats into "—", while the agent
+itself keeps working. The right fix is a local status endpoint in the daemon,
+which has been requested. Replace the parsing as soon as it exists.
+
+## The daemon log is a real file mirrored to stdout
+
+The daemon writes `/var/log/bma.log` (the path is hardcoded). It is a real
+file so the page can parse it; `tail -F` mirrors it to `docker logs`, and the
+entrypoint loop truncates it at 50 MB (there is no logrotate in the
+container). The file is created in the image and owned by uid 1000, because
+`/var/log` itself isn't writable for an unprivileged user.
+
+## The entrypoint is a supervisor loop, not just `exec`
+
+Saving credentials must restart the daemon without restarting the container:
+a container restart would drop the page mid-interaction and bounce
+app_proxy's target. Docker can't watch files, so the entrypoint checks the
+config's modification time every 5 s and starts or restarts `bma-daemon` when
+it changes. It also restarts the setup page if that stops. `init: true` in
+compose handles signals as PID 1 above it.
 
 ## Credentials: plaintext YAML, mode 0600, included in backups
 
 `/data/daemon.yaml` mirrors the stock `.deb`'s `/etc/braiins-manager-agent/`
-config — same two keys, same trust model. Umbrel offers no app secret store.
-Mode 0600, owned by uid 1000. Deliberately NOT in `backupIgnore`: restoring a
-backup should bring the agent back paired. Known accepted risk (pre-GA review
-item): `web:8080` is unauthenticated on Umbrel's shared Docker network —
-app_proxy auth only covers the browser path — so a malicious co-installed app
-could replace the credentials. Mitigation candidates: require the current
-Secret key to overwrite an existing config.
+config: the same two keys and the same trust model. Umbrel has no secret store
+for apps. The file is mode 0600, owned by uid 1000, and written atomically.
+It is deliberately NOT in `backupIgnore`: restoring a backup should bring the
+agent back paired. Risk on the shared network: another app could replace the
+credentials through `web:8080`. Candidate fix: require the current Secret key
+to overwrite an existing config.
 
-## Port 4547
+## Version scheme: upstream version; packaging releases use the next patch
 
-Umbrel's manifest `port` is a static host-port claim with no conflict
-detection or fallback anywhere in the platform — installs simply fail if it's
-taken. 4547 was chosen as unclaimed across the official store (checked
-2026-07-23; official review re-checks on submission). `APP_PORT: 8080` in
-compose is the *container-internal* port and can never conflict. Don't change
-4547 after release; users' bookmarks and the app URL depend on it.
+The manifest `version` is the upstream agent version users recognize (an
+earlier `4.10.0-build-N` scheme was retired). A packaging-only release with a
+badge uses a pre-release suffix on the *next* patch: `4.15.1-1` while shipping
+agent 4.15.0. In `bump.py` that sorts above 4.15.0 and below a real upstream
+4.15.1, so upstream always wins when it ships. Never jump to a whole upstream
+version (for example `4.16.0`): it would collide when that agent is released.
 
-## Icon and gallery are committed files + https URLs (community store only)
+## The page shows two versions
 
-The dashboard CSP is `img-src * blob:` — in CSP, `*` excludes `data:` URIs, so
-inline icons silently fall back to a placeholder. Community stores serve assets
-from the repo via raw.githubusercontent URLs. For an official-store submission
-these files and the manifest `icon`/`gallery` entries are REMOVED — Umbrel's
-team creates and hosts official assets; screenshots go in the PR body (their
-linter warns about committed assets for exactly this reason).
-
-## `manifestVersion: 1.1`
-
-Widgets are app-framework behavior introduced after 1.0. Every official
-widget-bearing app declares ≥ 1.1; declaring 1 would let older umbrelOS
-versions install the app with a broken widget. Bump further only when adopting
-newer framework features.
-
-## Widget icons are Tabler slugs, not our own SVGs
-
-umbrelOS renders the home-screen widget itself; the app only returns JSON. A
-`three-stats` item is `{icon, text, subtext}` — there is **no `title` field**
-(an earlier version set `title`, which silently never rendered, and showed no
-icons). `icon` is a [Tabler Icons](https://tabler.io/icons) slug: umbrelOS
-copies `@tabler/icons` (pinned **2.39.0**) to `/generated-tabler-icons/<slug>.svg`
-and serves that, plus four built-in `system-widget-*` icons. An unknown slug
-renders as an empty placeholder box, so a slug must exist *in 2.39.0* — not just
-in the current Tabler set. We use `plug-connected` / `cpu` / `cloud-upload`;
-verify replacements against 2.39.0 before changing them. `text` is the
-emphasized value, `subtext` the muted caption below it.
-
-## Home-screen widget instead of Docker HEALTHCHECK
-
-umbreld ignores Docker health status entirely (app state is lifecycle-driven —
-verified in umbreld source). The `widgets:` mechanism is the only *native*
-live-status surface: umbrelOS fetches `web:8080/widgets/status` server-side
-(no auth, no app_proxy) and renders it on the home screen. A HEALTHCHECK would
-only improve `docker ps` output for support; add it if support workflows want
-it, but don't expect the dashboard to react.
-
-## Image tag = upstream agent version; wrapper releases pick a mode
-
-Official rule: manifest `version` is the upstream version users recognize —
-the earlier `4.10.0-build-N` scheme was retired. Compose always pins the
-**multi-arch index digest** (`tag@sha256:…`), so installs are reproducible
-regardless of tag mutation.
-
-The Update badge is the constraint that shapes wrapper-only releases (a repo
-change with no new agent): umbrelOS computes "update available" in the frontend
-by comparing the installed manifest `version` against the store's — the
-`apps.list` route exposes only `version`, with no content/digest comparison
-(the git-commit check in `app-repository.ts` only decides when to re-pull the
-*store*, not per-app updates). So a wrapper change that keeps `version` gets
-**no** badge for existing installs. `wrapper-release.yml` therefore offers two
-modes: re-push the same tag with a new digest (reproducible, but new installs
-only), or bump `version` — using a pre-release suffix on the next patch
-(`4.11.1-1`) that sorts above the current agent version yet below a real
-upstream `4.11.1`, so upstream always wins when it ships. Don't fake a whole
-upstream version (e.g. jumping to `4.12.0`); it would collide when that agent
-actually releases.
-
-## The web UI shows two versions
-
-The footer shows both the **Umbrel app (wrapper) version** and the **agent
-daemon version**, because a wrapper release bumps the former without changing
-the latter (`4.11.1-1` packaging the `4.11.0` daemon) — showing only the daemon
-version would leave a user unable to tell which wrapper revision they run. The
-daemon version comes from `bma-daemon --version` (baked in the image). The
-wrapper version can't: the container has no access to the store manifest, so
-`docker-compose.yml` injects it as the `APP_VERSION` env var, which `webui.py`
-reads. `bump.py pin` rewrites `APP_VERSION` alongside the image tag on every
-release, keeping it equal to the manifest `version`. If `APP_VERSION` is unset
-(plain `docker run`, local dev, CI smoke build), the footer just omits it.
-
-## `--provenance=false` on buildx
-
-BuildKit attaches provenance attestation manifests by default; ghcr's UI lists
-them as a confusing `unknown/unknown` architecture. We disable them for a
-legible package page. If supply-chain attestation ever becomes a requirement,
-re-enable deliberately and document the ghcr UI artifact.
-
-## No agent self-update inside the container
-
-The agent's built-in update feed can't apply inside a
-container (no dpkg/systemd). Updates flow exclusively through Umbrel app
-updates: new image + version bump → users get the Update badge, `/data`
-persists. This is the correct model, not a limitation to fix.
-
-## No hooks
-
-Nothing here needs lifecycle scripts: installs get `data/` from the committed
-package scaffolding (owned by uid 1000 via umbreld), config is rendered by the
-web UI at runtime, and there are no migrations. Add hooks only for real
-existing-install migrations (see the official `umbrel-package-app` skill for
-hook semantics), not for scaffolding compose/templates can express.
-
-## Web UI styling: Braiins CDS v11 tokens, fonts served locally
-
-The setup page uses Braiins CDS v11 (IBM Carbon v11) color/type/spacing token
-values, hand-inlined into `webui.py` — no CSS framework, the page is one file.
-Semantic tokens re-resolve between the White and Gray 90 themes via
-`prefers-color-scheme`. The primary action and focus ring are violet-60
-(brand), a deliberate override of the token file's blue-60; links keep the
-CDS blue link tokens. Braiins Sans (regular + bold
-WOFF2, converted from the public visualbook OTFs at
-design.braiins.com/braiins/typography) is committed under `image-braiins-manager-agent/fonts/`,
-baked into the image, and served by `webui.py` itself: an Umbrel box must not
-depend on a Braiins web host to render its local setup page, and phoning an
-external CDN from a self-hosted node is exactly what Umbrel users install
-apps to avoid. Revisit only if the visualbook adds a semibold (the Carbon
-600-weight styles currently resolve to bold) or the token values change.
+The footer shows both the **Umbrel app version** and the **agent daemon
+version**, because a packaging release changes the first and not the second
+(`4.14.1-1` packaged daemon `4.14.0`). The daemon version comes from
+`bma-daemon --version`. The app version can't be read in the container, which
+has no access to the store manifest, so compose passes it as `APP_VERSION`;
+`bump.py pin` keeps it equal to the manifest `version` on every release.
+Without `APP_VERSION` (plain `docker run`, local development, CI smoke test)
+the footer leaves it out.
 
 ---
 
-# Braiins Toolbox package
+# Braiins Toolbox
 
-## The official binary, unmodified — no wrapper, no entrypoint script
+## The official binary as it is, no extra code
 
-Unlike the agent, Toolbox needs zero glue: its GUI *is* an embedded web
-server (`--gui-listen-address`), so the container entrypoint is the binary
-itself. The tarball comes from the same public feed pattern as the agent
-`.deb` (`downloads.braiins.com/braiins-toolbox/index.json`), sha256-verified
-against the feed's published checksum. The binary is statically linked
-(static-pie); Alpine is there only for `ca-certificates` (BOS firmware
-downloads during installs, release feed checks). Anyone can rebuild the image
-from public artifacts alone; this repo never contains Toolbox code.
+Toolbox's web interface is its own embedded web server
+(`--gui-listen-address`), so the container runs the binary directly: no
+entrypoint script, no web page of ours. The tarball comes from the public feed
+(`downloads.braiins.com/braiins-toolbox/index.json`).
 
 ## `HOME=/data` instead of per-path flags
 
-Every Toolbox state path (GUI config with saved IP sources, pool presets,
-logs, install UUID) resolves via XDG defaults under `$HOME`. Setting
-`HOME=/data` persists all of it through one volume and stays correct if a new
-Toolbox version adds more state files — safer than enumerating
-`--gui-config-path`/`--pool-presets-file-path`/`--logfile-path` flags and
-missing a new one later. Logs are excluded from Umbrel backups via
-`backupIgnore` (`data/.local/share/braiins-toolbox/logs/*`).
+All Toolbox state (web interface config with saved IP ranges, pool presets,
+logs, install UUID) follows the XDG defaults under `$HOME`. Setting
+`HOME=/data` keeps all of it on one volume and stays correct if a new Toolbox
+version adds state files. Listing `--gui-config-path`,
+`--pool-presets-file-path` and `--logfile-path` would miss a new one some day.
+Logs are kept out of Umbrel backups with `backupIgnore`
+(`data/.local/share/braiins-toolbox/logs/*`).
 
-## Port 4548
+## Port 4548, not Toolbox's native 8888
 
-Same platform constraint as the agent's 4547 (static host-port claim, no
-conflict detection). Toolbox's native 8888 is already taken in the official
-store, so the app claims 4548 — adjacent to the agent's 4547 (checked
-unclaimed in the official store 2026-07-29). `APP_PORT: 8888` in compose is
-container-internal. Don't change 4548 after release.
+8888 is already taken in the official store.
 
 ## No home-screen widget (yet)
 
-The GUI's internal HTTP API is undocumented and unversioned, and there is no
-local status endpoint contract like the one requested for the agent. A widget
-scraping undocumented GUI endpoints would break silently on any Toolbox
-release. Add one when Toolbox exposes a stable local status endpoint.
+Toolbox's internal HTTP API is undocumented and unversioned, and it has no
+local status endpoint. A widget scraping undocumented endpoints would break
+silently on any Toolbox release. Add one when Toolbox exposes a stable status
+endpoint.
 
-## No Toolbox self-update inside the container
+## Biggest risk on the shared network
 
-Toolbox checks the release feed and logs "toolbox is up to date" (or offers a
-self-update). The binary lives at `/usr/bin/braiins-toolbox` owned by root
-while the process runs as uid 1000, so a self-update cannot apply — by
-design. Updates flow exclusively through Umbrel app updates: bump
-`TOOLBOX_VERSION` + checksums in the Dockerfile, push the image, pin the
-digest, bump the manifest `version`.
-
-## Unauthenticated GUI on the shared Docker network (accepted, pre-GA item)
-
-Same risk class as the agent's `web:8080`, with a bigger blast radius:
-`web:8888` has no auth of its own, and app_proxy only covers the browser
-path, so a malicious co-installed app could drive the GUI's API — and Toolbox
-can reconfigure and reflash every miner on the LAN. Umbrel's threat model
-(apps on one shared network are mutually trusted) accepts this today; a GUI
-auth option in the Toolbox product is the right fix. Do not "fix" it here by
-publishing raw ports or disabling app_proxy auth — those only widen exposure.
+`web:8888` has no login, and Toolbox can reconfigure and reflash every miner on
+the LAN, so a malicious app on the same Umbrel could do a lot of damage. A
+login option in the Toolbox product is the right fix.
 
 ## Miner passwords
 
-Toolbox prompts for non-default miner passwords in the GUI per session/action
-(`-p` on the CLI); it does not persist credentials to disk in the current
-setup. Nothing password-shaped lands in `/data` — if a future version adds a
-credential store, revisit backup and permissions handling then.
+Toolbox asks for non-default miner passwords in the web interface per session
+or action (`-p` on the CLI) and doesn't store them in the current setup.
+Nothing password-like lands in `/data`. If a future version adds a credential
+store, revisit backups and file permissions then.
 
-## Wrapper versions are revisions (26.06-1), not next-patch pre-releases
+## Version scheme: packaging releases are revisions (`26.09-1`)
 
-The agent's wrapper scheme fakes a pre-release of the *next* patch
-(`4.11.1-1` while shipping agent 4.11.0) so a real upstream 4.11.1 supersedes
-it under semver. Toolbox deliberately diverges: upstream is CalVer and *does*
-publish real patch releases (`23.04.1`), so a fabricated `26.06.1-1` would
-read as an upstream hotfix that doesn't exist. Toolbox wrapper releases are
-debian-style revisions of the version actually shipped: `26.06-1`, `26.06-2`.
+The agent's scheme fakes a pre-release of the next patch. Toolbox can't: it
+uses CalVer and *does* publish real patch releases (`23.04.1`), so a made-up
+`26.09.1-1` would read as an upstream hotfix that doesn't exist. Toolbox
+packaging releases are Debian-style revisions of the version actually
+shipped: `26.09-1`, `26.09-2`.
 
-Two facts make this safe (both verified in source, umbrel master @ 2026-07):
+In `bump.py` a Toolbox suffix sorts *above* its plain version and *below* the
+next upstream one (`26.06 < 26.06-1 < 26.06.1 < 26.07`), the opposite of the
+agent rule. Without that, after a `26.06-1` release the daily check would see
+plain `26.06` as newer and open a downgrade PR.
 
-- umbrelOS shows the Update badge on plain version **inequality**
-  (`ui/src/hooks/use-apps-with-updates.ts`: `availableApp.version !==
-  app.version`) — no ordering, no semver. Any changed string triggers it.
-- Ordering only matters inside our own `bump.py` feed check ("is upstream
-  newer than the manifest?"). There, per-app rules apply: for toolbox a
-  suffixed version sorts *above* its plain core and *below* the next upstream
-  version (`26.06 < 26.06-1 < 26.06.1 < 26.07`); for the agent the suffix
-  sorts *below* its core, preserving its next-patch scheme. Without the
-  toolbox rule, a wrapper release `26.06-1` would make the daily feed check
-  see plain `26.06` as "newer" and open a spurious downgrade PR.
+---
 
-# Bitcoin Data package
+# Bitcoin Data
 
-## App id is `braiins-bitcoin-data`, not `bitcoin-data`
+## No upstream: the repo is the app
 
-umbreld silently filters community-store apps whose id doesn't start with the
-store id (`app-repository.ts`: `app.id.startsWith(meta.id)`, store id
-`braiins`) — the app cloned fine on the device but never appeared in the store
-UI, with nothing in the logs. Every app in this store must be `braiins-*`.
-The 1.0.0 release initially shipped as `bitcoin-data` and hit exactly this;
-the display name stays "Bitcoin Data".
-
-## No upstream — the repo is the app
-
-Unlike the agent and Toolbox, Bitcoin Data packages no Braiins binary: the
-entire app is `image-braiins-bitcoin-data/webui.py` (stdlib-only Python, same pattern
-as the agent's config UI) plus the locally served Braiins Sans fonts. There is
-therefore no release feed, no `check` in `bump.py` (its `feed` is `None`), and
-no daily update workflow — releases are human-triggered via
-`braiins-bitcoin-data-release.yml`, and versions are plain semver (`1.0.0`) with no
-wrapper-suffix scheme, since every release is by definition a wrapper release.
+Bitcoin Data packages no Braiins binary. The whole app is
+`image-braiins-bitcoin-data/webui.py` plus the Braiins Sans fonts. So there is
+no release feed (`feed: None` in `bump.py`) and no daily update workflow.
+Releases are started by hand with `braiins-bitcoin-data-release.yml`, and
+versions are plain semver (`1.13.1`) with no suffix scheme, since every
+release is a packaging release.
 
 ## All data comes from the user's own node
 
-`dependencies: [bitcoin]` in the manifest; the compose file passes the
-official bitcoin app's exported `APP_BITCOIN_NODE_IP` / `APP_BITCOIN_RPC_PORT`
-/ `APP_BITCOIN_RPC_USER` / `APP_BITCOIN_RPC_PASS` (the same contract mempool
-consumes). No third-party API is ever called — the point of the app is that
-the numbers come from a chain the user verified. The UI degrades to a labeled
-waiting/syncing state when the node is unreachable or in IBD instead of
+The manifest has `dependencies: [bitcoin]`, and compose passes the official
+Bitcoin app's exported `APP_BITCOIN_NODE_IP`, `APP_BITCOIN_RPC_PORT`,
+`APP_BITCOIN_RPC_USER` and `APP_BITCOIN_RPC_PASS` (the same contract mempool
+uses). No third-party API is ever called: the point of the app is that the
+numbers come from a chain the user verified. When the node is unreachable or
+still syncing, the page shows a labeled waiting or syncing state instead of
 falling back to a public API.
+
+## Errors keep the loop alive, and stale data is shown as an error
+
+The background loop that polls the node catches every error, so one broken
+reply can't stop it for good. The page reports an error after 5 minutes
+without a successful poll instead of keeping "ok" next to old data. If the
+node is on a shorter chain than the cache (for example after a reindex), the
+epochs above the node's tip are dropped.
 
 ## One header per epoch, JSON cache, no database
 
 Difficulty only changes at 2016-block retarget boundaries, so the full history
-is one `getblockheader` per boundary (~460 as of 2026) — a seconds-long
-backfill against a local node, cached in `/data/epochs.json` (atomic
-write-and-rename, saved every 100 headers so a restart resumes). The cache is
-fully regenerable from the node, so it's a plain JSON file, not SQLite; losing
-`/data` costs one re-backfill. A 30 s tip poll appends a boundary per
-retarget. The projected next adjustment uses the current epoch's average block
-interval (clamped to the consensus ×4/÷4 bounds) — the standard estimator,
-matching what public explorers show.
-
-## Port 4549
-
-Next in the Braiins block after 4547 (agent) and 4548 (Toolbox). Verified free
-against the official store's manifests and compose host ports at the time of
-writing (nearest neighbors: 4533, 4567). Same rule as the others: don't change
-it after release.
+is one `getblockheader` per boundary (about 460 in 2026). Against a local node
+that takes seconds. The result is cached in `/data/epochs.json` (atomic write
+and rename, saved every 100 headers so a restart resumes). The cache can
+always be rebuilt from the node, so a plain JSON file is enough; losing
+`/data` costs one re-read. A 30 s tip poll adds a boundary at each retarget.
+The projected next adjustment uses the current epoch's average block interval,
+clamped to the consensus ×4/÷4 bounds: the standard estimate, matching public
+explorers.
 
 ## Chart colors are validated, not eyeballed
 
-The dashboard follows the Braiins CDS v11 token conventions established for
-the agent's UI (violet primary, White/Gray-90 themes). Chart data colors are
-deliberately NOT the CDS semantic green/red: difficulty going up is neither
-good nor bad, so the adjustment chart uses a warm/cool diverging pair —
-Carbon blue for increases, Carbon orange for decreases — with blue-60/orange-60
-in light mode and blue-50/orange-50 in dark (the 40-steps sit outside the
-dark-mode lightness band). Both pairs pass the full colorblind-safety
-validation (CVD ΔE ≥ 8 under protanopia/deuteranopia simulation, ≥ 3:1
-contrast against both surfaces). The name "Bitcoin Data" (not "Difficulty")
-is deliberate: the UI shell has a nav slot for future data modules.
+Difficulty going up is neither good nor bad, so the adjustment chart doesn't
+use the CDS semantic green and red. It uses a warm/cool diverging pair: Carbon
+blue for increases and Carbon orange for decreases, blue-60/orange-60 in light
+mode and blue-50/orange-50 in dark mode (the 40 steps fall outside the dark
+mode lightness band). Both pairs pass colorblind-safety checks (CVD ΔE ≥ 8
+under protanopia and deuteranopia simulation, contrast ≥ 3:1 against both
+surfaces).
+
+## The name is "Bitcoin Data", not "Difficulty"
+
+The page has a navigation slot for more data modules later; difficulty is
+only the first.
