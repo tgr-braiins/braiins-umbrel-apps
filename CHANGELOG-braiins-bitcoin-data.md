@@ -8,6 +8,14 @@ repo's `image-braiins-bitcoin-data/webui.py` — so the version is plain semver
 
 <!-- new entries are inserted directly below this line -->
 
+## [1.14.0] - 2026-11-25
+
+Hashrate, the next retarget date and the halving date now stay sensible in the first blocks after a difficulty change. Before, they could be far off for about an hour every two weeks.
+
+- Fees now show on pruned nodes.
+- The projected difficulty change matches how Bitcoin measures an epoch.
+- A damaged cache file or a full disk no longer stops the live updates.
+
 ## [1.13.1] - 2026-11-23
 
 Maintenance release: rebuilt on Alpine 3.24. The app no longer stops updating after an unexpected reply from the Bitcoin node, and it now shows an error when the data has not been refreshed for 5 minutes instead of staying on stale numbers.

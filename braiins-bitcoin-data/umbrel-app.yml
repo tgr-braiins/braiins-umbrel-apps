@@ -2,7 +2,7 @@ manifestVersion: 1.1
 id: braiins-bitcoin-data
 category: bitcoin
 name: Bitcoin Data
-version: "1.13.1"
+version: "1.14.0"
 tagline: Difficulty epochs, charted from your own Bitcoin node
 description: >-
   Bitcoin Data reads the blockchain from your own Bitcoin node and presents
@@ -18,7 +18,13 @@ description: >-
   Requires the Bitcoin app. On first start the app reads one block header
   per difficulty epoch from your node (a few hundred headers, typically
   done in seconds) and keeps itself current from then on.
-releaseNotes: ""
+releaseNotes: |-
+  Hashrate, the next retarget date and the halving date now stay sensible in the first blocks after a difficulty change. Before, they could be far off for about an hour every two weeks.
+
+  - Fees now show on pruned nodes.
+  - The projected difficulty change matches how Bitcoin measures an epoch.
+  - A damaged cache file or a full disk no longer stops the live updates.
+
 developer: Braiins
 website: https://braiins.com
 dependencies:
