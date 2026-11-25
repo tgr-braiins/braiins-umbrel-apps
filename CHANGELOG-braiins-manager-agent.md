@@ -13,6 +13,14 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.15.1-1] - 2026-11-25
+
+Maintenance release of the Umbrel package (Braiins Manager Agent 4.15.0 unchanged).
+
+- The app now runs on arm64 Umbrels such as a Raspberry Pi. The arm64 image contained the wrong agent binary.
+- Stopping or updating the app lets the agent shut down cleanly.
+- The settings page accepts new credentials only from itself, not from other websites or apps.
+
 ## [4.15.0] - 2026-11-24
 
 The Braiins Manager Agent **4.15.0** release makes data polling more reliable on large sites, moves Braiins OS error polling to the agent, and fixes two crashes.
