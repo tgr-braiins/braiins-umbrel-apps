@@ -15,6 +15,12 @@ workflows.
 
 <!-- new entries are inserted directly below this line -->
 
+## [26.09-2] - 2026-11-25
+
+Maintenance release of the Umbrel package (Braiins Toolbox 26.09 unchanged).
+
+- The app now runs on arm64 Umbrels such as a Raspberry Pi. The arm64 image contained the wrong Toolbox binary.
+
 ## [26.09-1] - 2026-11-23
 
 Maintenance release of the Umbrel package (Braiins Toolbox 26.09 unchanged): rebuilt on Alpine 3.24.

@@ -2,7 +2,7 @@ manifestVersion: 1
 id: braiins-toolbox
 category: bitcoin
 name: Braiins Toolbox
-version: "26.09-1"
+version: "26.09-2"
 tagline: Scan, monitor, and batch-manage your ASIC miners
 description: >-
   Braiins Toolbox is Braiins' tool for managing ASIC miners at scale, running
@@ -20,7 +20,9 @@ description: >-
   List. Monitoring is read-only; management actions are always explicit —
   nothing is changed on your miners unless you trigger it.
 releaseNotes: |-
-  Maintenance release of the Umbrel package (Braiins Toolbox 26.09 unchanged): rebuilt on Alpine 3.24.
+  Maintenance release of the Umbrel package (Braiins Toolbox 26.09 unchanged).
+
+  - The app now runs on arm64 Umbrels such as a Raspberry Pi. The arm64 image contained the wrong Toolbox binary.
 
 developer: Braiins
 website: https://braiins.com/toolbox
