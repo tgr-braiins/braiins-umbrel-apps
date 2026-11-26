@@ -434,7 +434,8 @@ product has its own version line (0.1.1 was the first), so the app id is
 ## The official binary as it is
 
 The binary serves its own web interface and API, so the container runs
-`braiins-proxy run` with no entrypoint script. `CONFIG_FILE`, `HOME` and
+`braiins-proxy run` with no entrypoint script. The image also carries `socat`
+for the app's relay container (see "Host network"). `CONFIG_FILE`, `HOME` and
 `XDG_STATE_HOME` put the configuration and the history database on `/data`;
 the history is left out of Umbrel backups (`backupIgnore: data/state/*`), the
 configuration is kept. A missing configuration is not an error: the proxy
