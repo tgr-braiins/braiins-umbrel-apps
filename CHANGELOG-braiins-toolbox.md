@@ -15,6 +15,26 @@ workflows.
 
 <!-- new entries are inserted directly below this line -->
 
+## [26.11] - 2026-11-25
+
+Braiins **Toolbox 26.11** adds the Continuous Tuner as a tuner type in the CLI, accepts Stratum V1 over TLS pool URLs, warns about unsecured pool connections, detects LuxOS 2026.11.x again, and brings device list, error message, and logging fixes.
+
+## GUI
+- Pool settings accept `stratum+ssl://` and `stratum+tls://` URLs, so you can move miners running Braiins OS 26.11 or newer to Stratum V1 over TLS.
+- **Unsecured pool connection warning**: the device list and the pool settings show a warning when a pool uses plain Stratum V1 (`stratum+tcp://`), with a link to Connection Security.
+- Fixed the Advanced Settings filter in the device list being ignored. The list and "Select All" included devices outside the filter, so a batch action could run on more devices than were shown.
+- The GUI shows links in device error messages as clickable, and download errors give the cause, for example DNS.
+
+## CLI
+- New `tuner type` command sets the tuner type (`normal`, `continuous` or `default`) on miners running Braiins OS 26.11 or newer.
+- `firmware install` has a new `--tuner-type` option.
+- `miner set-pool-urls` and `firmware install` accept `stratum+ssl://` pool URLs.
+
+## CLI & GUI
+- LuxOS 2026.11.x is detected again (26.09 failed to detect it).
+- Advanced settings show deprecated settings and the Braiins OS versions that support them, in both the GUI and the CLI.
+- Toolbox no longer crashes when a log file is missing, and logging no longer stops after a failed log rotation.
+
 ## [26.09-2] - 2026-11-25
 
 Maintenance release of the Umbrel package (Braiins Toolbox 26.09 unchanged).
