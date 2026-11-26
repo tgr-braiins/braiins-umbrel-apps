@@ -54,5 +54,5 @@ defaultUsername: ""
 defaultPassword: ""
 backupIgnore:
   - data/state/*
-submitter: Braiins
+submitter: tgr-braiins
 submission: ""

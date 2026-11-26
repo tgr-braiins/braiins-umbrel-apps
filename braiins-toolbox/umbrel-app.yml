@@ -69,5 +69,5 @@ defaultPassword: ""
 backupIgnore:
   - data/.local/share/braiins-toolbox/logs/*
 
-submitter: Braiins
+submitter: tgr-braiins
 submission: ""

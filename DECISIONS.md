@@ -26,7 +26,10 @@ the repo or the store may suggest otherwise:
 - `developer: Braiins` in the manifests of the agent, Toolbox and the proxy
   names who wrote the software, which is true. Their binaries are the
   official releases, downloaded from `downloads.braiins.com` and checked by
-  sha256, never modified.
+  sha256, never modified. Bitcoin Data is written in this repo, so its
+  developer is the repo's GitHub account, `tgr-braiins`.
+- `submitter` in every manifest is `tgr-braiins`: the account that packages
+  the apps, not Braiins.
 - Problems with the packaging go to this repo's issues, not to Braiins
   support.
 
