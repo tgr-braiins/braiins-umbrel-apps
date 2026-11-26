@@ -14,12 +14,6 @@ import sys
 ACCEPTED_ERRORS = {
     "manifest.submission",  # set to the submission PR URL at submission time
 }
-# Errors accepted for one file only, as (rule, file).
-ACCEPTED_IN_FILE = {
-    # Braiins Proxy runs on the host network, so the app proxy points at the
-    # Docker gateway address instead of a service (DECISIONS, "Host network").
-    ("app_proxy.host", "braiins-proxy/docker-compose.yml"),
-}
 
 
 def main(path):
@@ -31,8 +25,7 @@ def main(path):
         where = issue.get("file") or "?"
         if issue.get("line"):
             where += ":%s" % issue["line"]
-        accepted = severity == "error" and (
-            rule in ACCEPTED_ERRORS or (rule, issue.get("file")) in ACCEPTED_IN_FILE)
+        accepted = severity == "error" and rule in ACCEPTED_ERRORS
         tag = "accepted" if accepted else severity
         print("%-8s %-28s %s  %s" % (tag, rule, where, issue.get("message", "")))
         if severity == "error" and not accepted:

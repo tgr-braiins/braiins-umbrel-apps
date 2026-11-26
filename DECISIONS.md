@@ -484,18 +484,19 @@ Consequences:
 
 - **The web interface listens on `10.21.0.1:24550` only.** That is the host's
   address on Umbrel's Docker network (`GATEWAY_IP` in umbrelOS, fixed
-  together with the `10.21.0.0/16` subnet that official apps hardcode). The
-  app proxy reaches it there (`APP_HOST: 10.21.0.1`); it is not on the LAN,
-  where it would be open without a login. Other containers can reach it, as
-  before. The port is an arbitrary free one below the ephemeral range. The
-  literal address is used rather than `$GATEWAY_IP` because older umbrelOS
-  versions don't export that variable.
-- **The official linter reports `app_proxy.host`**, because `APP_HOST` is not
-  a service of the compose file. `umbrel_lint.py` accepts that error for this
-  file only. For a submission to the official store, either the proxy gets an
-  address setting (then go back to a bridge container), or a small relay
-  service is put between the app proxy and the gateway address, as the
-  official Formicaio app does.
+  together with the `10.21.0.0/16` subnet that official apps hardcode). It is
+  not on the LAN, where it would be open without a login. Other containers
+  can reach it, as before. The port is an arbitrary free one below the
+  ephemeral range. The literal address is used rather than `$GATEWAY_IP`
+  because older umbrelOS versions don't export that variable.
+- **A second container, `web`, relays the app proxy to that address.** The
+  official linter requires `APP_HOST` to be a service of the compose file
+  (`app_proxy.host`), so the app proxy can't point at `10.21.0.1` directly.
+  `web` runs `socat` from the same image on the bridge network and forwards
+  port 8080 to `10.21.0.1:24550`, the way the official Formicaio app does.
+  Only the web interface goes through it; miners connect to the proxy on the
+  host directly. If the proxy gets an address setting, drop the relay and
+  the host network together.
 - **The mining port is whatever the web interface sets** (3333 by default),
   bound directly on the host. Nothing is published by Docker, so no range is
   reserved. Another program on that port stops the proxy from listening.

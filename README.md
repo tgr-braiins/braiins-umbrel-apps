@@ -163,9 +163,8 @@ check must pass before anything merges:
 - **umbrel-lint:** the official Umbrel linter with `--check-images`, run from
   getumbrel/umbrel-apps at a fixed commit (`UMBREL_APPS_REF`) so a new
   upstream rule can't break unrelated PRs. `.github/scripts/umbrel_lint.py`
-  accepts the errors a community store has by design (the empty `submission`,
-  and Braiins Proxy's `APP_HOST`, which is an address because the proxy runs
-  on the host network) and fails on any other error. Move `UMBREL_APPS_REF` forward on purpose, in
+  accepts the errors a community store has by design (the empty `submission`)
+  and fails on any other error. Move `UMBREL_APPS_REF` forward on purpose, in
   its own PR.
 
 On PRs that the release workflows open, GitHub holds CI until a maintainer

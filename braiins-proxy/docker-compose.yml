@@ -3,10 +3,19 @@ version: "3.7"
 services:
   app_proxy:
     environment:
-      # The proxy runs on the host network (below), so Umbrel's app proxy
-      # reaches its web interface on the host side of Umbrel's Docker network.
-      APP_HOST: 10.21.0.1
-      APP_PORT: 24550
+      APP_HOST: braiins-proxy_web_1
+      APP_PORT: 8080
+
+  # Relays Umbrel's app proxy to the web interface of the proxy, which runs
+  # on the host network (below) and so is not a service the app proxy can
+  # name. Only the web interface passes through here, never miner traffic.
+  web:
+    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.1@sha256:42a2c783a4c49e5df5cf9a162b9c45a63daa23d2ec945700f8c3e200a54f4ae8
+    user: "1000:1000"
+    init: true
+    restart: on-failure
+    entrypoint: ["socat"]
+    command: ["TCP-LISTEN:8080,fork,reuseaddr", "TCP:10.21.0.1:24550"]
 
   proxy:
     image: ghcr.io/tgr-braiins/braiins-proxy:0.1.1@sha256:42a2c783a4c49e5df5cf9a162b9c45a63daa23d2ec945700f8c3e200a54f4ae8
