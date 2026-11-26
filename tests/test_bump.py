@@ -208,6 +208,13 @@ class Pin(RepoCopy):
         self.assertIn(f"braiins-manager-agent:4.15.1-1@{digest}", compose)
         self.assertIn('APP_VERSION: "4.15.1-1"', compose)
 
+    def test_pin_sets_both_images_of_the_proxy(self):
+        digest = "sha256:" + "d" * 64
+        self.quiet(bump.pin, PROXY, "0.1.2-1", digest)
+        compose = self.read(PROXY, "compose")
+        self.assertEqual(compose.count(f"braiins-proxy:0.1.2-1@{digest}"), 2)
+        self.assertNotIn(":0.1.1@", compose)
+
     def test_pin_refuses_bad_input(self):
         self.assert_exits(bump.pin, AGENT, "4.15.1-1", "sha256:xyz")
         self.assert_exits(bump.pin, AGENT, "4.15.1\nimage: evil", "sha256:" + "c" * 64)

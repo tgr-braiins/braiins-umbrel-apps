@@ -3,24 +3,41 @@ version: "3.7"
 services:
   app_proxy:
     environment:
-      APP_HOST: braiins-proxy_proxy_1
+      APP_HOST: braiins-proxy_web_1
       APP_PORT: 8080
 
+  # Relays Umbrel's app proxy to the web interface of the proxy, which runs
+  # on the host network (below) and so is not a service the app proxy can
+  # name. Only the web interface passes through here, never miner traffic.
+  web:
+    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.2-1@sha256:d2d7f339bb6b68b10c55787f7fe62ab5f313d5891b082b50ef806f7ded888b5a
+    user: "1000:1000"
+    init: true
+    restart: on-failure
+    entrypoint: ["socat"]
+    command: ["TCP-LISTEN:8080,fork,reuseaddr", "TCP:10.21.0.1:24550"]
+
   proxy:
-    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.1@sha256:42a2c783a4c49e5df5cf9a162b9c45a63daa23d2ec945700f8c3e200a54f4ae8
+    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.2-1@sha256:d2d7f339bb6b68b10c55787f7fe62ab5f313d5891b082b50ef806f7ded888b5a
     user: "1000:1000"
     init: true
     # the proxy exits on a fatal error and expects a supervisor to restart it
     restart: unless-stopped
     stop_grace_period: 30s
+    # Host network: the proxy works out the address it shows for miners from
+    # its own network interfaces. In a bridge container that is the internal
+    # Docker address (10.21.0.x), which no miner can reach. On the host
+    # network it finds the Umbrel's LAN address. Miners connect to the mining
+    # port (3333 by default, changed in the web interface) on that address.
+    network_mode: host
+    environment:
+      # Only on Umbrel's Docker gateway address (fixed in umbrelOS), never on
+      # the LAN: the web interface has no password of its own, Umbrel's login
+      # in front of the app proxy protects it.
+      BRAIINS_PROXY_HTTP: 10.21.0.1:24550
     ulimits:
       nofile:
         soft: 262144
         hard: 1048576
-    # Miners connect straight to the Umbrel's IP. The default configuration
-    # listens on 3333; the rest of the range is free for a different port
-    # chosen in the web interface.
-    ports:
-      - "3333-3339:3333-3339"
     volumes:
       - ${APP_DATA_DIR}/data:/data

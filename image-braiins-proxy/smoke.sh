@@ -20,6 +20,7 @@ cleanup() { docker logs "$NAME" 2>&1 | tail -20; docker rm -f "$NAME" >/dev/null
 trap cleanup EXIT
 
 docker run --rm --user 1000:1000 "$IMAGE" --version | grep -F "Braiins Proxy $EXPECT,"
+docker run --rm --user 1000:1000 --entrypoint socat "$IMAGE" -V | grep -F 'socat version'
 docker run -d --name "$NAME" -p "$PORT:8080" --user 1000:1000 --init "$IMAGE"
 wait_for 60 curl -fs "http://localhost:$PORT/"
 curl -fs "http://localhost:$PORT/" | grep -F '<title>Braiins Proxy</title>'

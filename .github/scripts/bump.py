@@ -109,6 +109,8 @@ APPS = {
         "compose": "braiins-proxy/docker-compose.yml",
         "changelog": "CHANGELOG-braiins-proxy.md",
         "image": "braiins-proxy",
+        # the proxy and the relay of its web interface run the same image
+        "compose_images": 2,
         # semver like the agent: a packaging release is a pre-release of the
         # next patch (0.1.2-1), so the next upstream version still sorts above
         "version_re": r"(\d+)\.(\d+)\.(\d+)(?:[-+]([0-9A-Za-z.-]+))?",
@@ -312,8 +314,9 @@ def pin(app, version, digest):
         sys.exit(f"not a valid version: {version}")
     image = f"image: ghcr.io/{REGISTRY_OWNER}/{app['image']}:{version}@{digest}"
     t, n = re.subn(r"image: ghcr\.io/\S+", lambda _: image, t)
-    if n != 1:
-        sys.exit(f"expected exactly one image line in compose, found {n}")
+    expected = app.get("compose_images", 1)
+    if n != expected:
+        sys.exit(f"expected {expected} image line(s) in compose, found {n}")
     if app["compose_app_version"]:
         # keep the footer version (webui.py reads APP_VERSION) in sync with the tag
         t, n = re.subn(r'APP_VERSION: ".*"', lambda _: f'APP_VERSION: "{version}"', t)
