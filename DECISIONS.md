@@ -444,9 +444,9 @@ starts with a Braiins Pool configuration that the web interface then edits.
 
 The proxy asks for a password only when a `gui-password` file exists, which
 `braiins-proxy install` creates. In the container there is none, so the web
-interface is open to whatever reaches port 8080 of the container: Umbrel's
-app proxy, behind Umbrel's login, and other containers on the shared Docker
-network. That is the same accepted risk as the other apps ("Web pages without
+interface is open to whatever reaches it: Umbrel's app proxy, behind Umbrel's
+login, and other containers on the shared Docker network (see "Host
+network"). That is the same accepted risk as the other apps ("Web pages without
 login on the shared Docker network").
 
 `braiins-proxy update` replaces the binary of a systemd service and is not
@@ -458,13 +458,51 @@ within a day. If that message causes confusion, ask the proxy team for a way
 to turn it off from the environment, so we don't have to write a configuration
 file the proxy considers its own.
 
-## Mining ports 3333–3339 on the host
+## Host network, so the proxy shows miners a reachable address
 
-Miners connect straight to the Umbrel's IP, so the mining ports are published
-on the host. The default configuration listens on 3333; the rest of the range
-leaves room for a different port chosen in the web interface. Another app
-that publishes one of these ports can't run next to this one. Revisit if users
-need it next to another pool app.
+The web interface tells the user which address to set on the miners. The
+proxy builds it from its own network interfaces (the address of the default
+route first) and has no setting or environment variable to override it
+(0.1.1). In a bridge container the only interface is Docker's, so the first
+package showed `stratum2+tcp://10.21.0.2:3333/...`, which no miner can reach.
+
+The proxy container therefore runs with `network_mode: host`. It then finds
+the Umbrel's LAN address, leaves out the Docker bridges, and offers a choice
+when there are several (LAN and Tailscale, for example). Alternatives that
+were rejected:
+
+- A name: Umbrel gives apps `umbrel.local`, but miner firmware has no mDNS
+  resolver (tested with Braiins OS on a BMM 100; BOS-4004 only makes the
+  miner announce its own name).
+- The address the browser used: it is the Tailscale address when the user
+  comes in over the VPN, which is why the proxy's interface ignores it.
+- A helper container that finds the address and passes it in: the proxy has
+  no input for it. If it gets one, a bridge container with published ports
+  becomes possible again.
+
+Consequences:
+
+- **The web interface listens on `10.21.0.1:24550` only.** That is the host's
+  address on Umbrel's Docker network (`GATEWAY_IP` in umbrelOS, fixed
+  together with the `10.21.0.0/16` subnet that official apps hardcode). The
+  app proxy reaches it there (`APP_HOST: 10.21.0.1`); it is not on the LAN,
+  where it would be open without a login. Other containers can reach it, as
+  before. The port is an arbitrary free one below the ephemeral range. The
+  literal address is used rather than `$GATEWAY_IP` because older umbrelOS
+  versions don't export that variable.
+- **The official linter reports `app_proxy.host`**, because `APP_HOST` is not
+  a service of the compose file. `umbrel_lint.py` accepts that error for this
+  file only. For a submission to the official store, either the proxy gets an
+  address setting (then go back to a bridge container), or a small relay
+  service is put between the app proxy and the gateway address, as the
+  official Formicaio app does.
+- **The mining port is whatever the web interface sets** (3333 by default),
+  bound directly on the host. Nothing is published by Docker, so no range is
+  reserved. Another program on that port stops the proxy from listening.
+- **The proxy shares the host's network namespace.** It runs the official
+  binary as uid 1000 without extra capabilities, but it can reach services
+  that listen only on the host's loopback. Home Assistant, Plex and Pi-hole
+  in the official store run the same way.
 
 ## Version scheme: like the agent
 

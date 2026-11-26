@@ -48,8 +48,12 @@ widgets are available: a halving countdown and current difficulty stats.
 Open the app and enter your Braiins Pool username under **Pools** (or set up
 another pool), then save. Set the pool URL of your miners to
 `stratum+tcp://<your-umbrel-ip>:3333`; the worker names stay the ones the
-miners send. Ports 3333–3339 on the Umbrel are reserved for miners, so another
-app that uses one of them (another pool or proxy) can't run next to it.
+miners send. The app shows this address itself; if your Umbrel has several
+(Wi-Fi and cable, or a VPN such as Tailscale), pick the one on your miners'
+network. Miner firmware usually can't resolve `umbrel.local`, so use the IP,
+and reserve it for the Umbrel in your router so it doesn't change. Another app
+that uses port 3333 (another pool or proxy) can't run next to it; you can
+change the port in the proxy's settings.
 
 Braiins Proxy updates through the Umbrel App Store like the other apps. Its
 `braiins-proxy update` command and the web interface password are for installs
@@ -159,8 +163,9 @@ check must pass before anything merges:
 - **umbrel-lint:** the official Umbrel linter with `--check-images`, run from
   getumbrel/umbrel-apps at a fixed commit (`UMBREL_APPS_REF`) so a new
   upstream rule can't break unrelated PRs. `.github/scripts/umbrel_lint.py`
-  accepts the errors a community store has by design (the empty `submission`)
-  and fails on any other error. Move `UMBREL_APPS_REF` forward on purpose, in
+  accepts the errors a community store has by design (the empty `submission`,
+  and Braiins Proxy's `APP_HOST`, which is an address because the proxy runs
+  on the host network) and fails on any other error. Move `UMBREL_APPS_REF` forward on purpose, in
   its own PR.
 
 On PRs that the release workflows open, GitHub holds CI until a maintainer

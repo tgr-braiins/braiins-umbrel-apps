@@ -31,8 +31,9 @@ COPY --from=fetch /braiins-proxy /usr/bin/braiins-proxy
 
 # The configuration (written by the web interface on every save) and the
 # hashrate history (state/braiins-proxy/history.db) both live in /data.
-# The web interface listens on every interface of the container: Umbrel's
-# app proxy reaches it over the Docker network, and its login protects it.
+# By default the web interface listens on every interface of the container.
+# The Umbrel app runs on the host network and narrows this to Umbrel's Docker
+# gateway address (braiins-proxy/docker-compose.yml).
 ENV HOME=/data \
     XDG_STATE_HOME=/data/state \
     CONFIG_FILE=/data/config.toml \

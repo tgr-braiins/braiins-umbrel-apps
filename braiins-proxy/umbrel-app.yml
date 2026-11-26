@@ -18,8 +18,10 @@ description: >-
 
 
   To get started, open the app, enter your Braiins Pool username under Pools
-  and save. Then set the pool URL of your miners to
-  stratum+tcp://<your-umbrel-ip>:3333.
+  and save. Then set the pool URL of your miners to the address the app
+  shows, stratum+tcp://<your-umbrel-ip>:3333. Use the IP address rather than
+  umbrel.local, which miners usually can't resolve, and reserve it for the
+  Umbrel in your router.
 
 
   Braiins Proxy updates through the Umbrel App Store. Its own update command
