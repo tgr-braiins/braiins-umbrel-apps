@@ -12,6 +12,24 @@ follow: [Manager Agent](#braiins-manager-agent),
 
 # All apps
 
+## An unofficial, personal project
+
+This store is a personal project that packages some Braiins apps for Umbrel.
+Braiins as a company does not manage, maintain or support it, and nothing in
+the repo or the store may suggest otherwise:
+
+- The README opens with that statement, the store is named "Braiins
+  (unofficial)" in umbrelOS (`umbrel-app-store.yml`), and every app's store
+  description ends with it.
+- The store id stays `braiins`: it is the required prefix of the app ids, and
+  changing it would orphan existing installs.
+- `developer: Braiins` in the manifests of the agent, Toolbox and the proxy
+  names who wrote the software, which is true. Their binaries are the
+  official releases, downloaded from `downloads.braiins.com` and checked by
+  sha256, never modified.
+- Problems with the packaging go to this repo's issues, not to Braiins
+  support.
+
 ## App ids start with `braiins-`
 
 umbreld silently drops community-store apps whose id doesn't start with the
@@ -81,7 +99,7 @@ a different base.
 
 ## Provenance: GitHub attestations, not BuildKit's
 
-Users need a way to tell our images from a copy that claims to be Braiins.
+Users need a way to tell this repo's images from a copy.
 The release workflow signs a SLSA build provenance attestation for each
 pushed index digest with `actions/attest-build-provenance` (keyless, through
 GitHub's OIDC token and Sigstore), then verifies it with
@@ -96,11 +114,13 @@ to the image index that the GHCR UI lists as an `unknown/unknown`
 architecture, and nothing checks them.
 
 What this proves: the image was built by `_release.yml` in this repo from a
-named commit. It does not prove that the repo belongs to Braiins. Today it is
-under a personal account, so the trust anchor is only as strong as that
-account. Moving the repo and packages to the Braiins GitHub org, with a
-verified domain and the store URL published on braiins.com, fixes that. The
-attestation's `--repo` and `--signer-workflow` then change to the org path.
+named commit. It does not prove anything about Braiins: the repo is a
+personal project under a personal account (see "An unofficial, personal
+project"), so the trust anchor is only as strong as that account. Only
+Braiins could change that, by taking the store into its own GitHub org with
+a verified domain and publishing the store URL on braiins.com. The
+attestation's `--repo` and `--signer-workflow` would then change to the org
+path.
 
 ## The Update badge only looks at the version string
 

@@ -1,6 +1,13 @@
-# Braiins Umbrel Apps
+# Braiins Umbrel Apps (unofficial)
 
-An [Umbrel](https://umbrel.com) community app store for [Braiins](https://braiins.com) apps.
+An unofficial [Umbrel](https://umbrel.com) community app store that packages
+some [Braiins](https://braiins.com) apps for Umbrel.
+
+> **This is not an official Braiins repository.** It is a personal project.
+> Braiins as a company does not manage, maintain or support it. The Braiins
+> apps inside are the official releases from `downloads.braiins.com`, unchanged;
+> the packaging for Umbrel is not from Braiins. "Braiins" and the product
+> names are used only to say which software is packaged.
 
 | App | What it does | Umbrel port |
 |---|---|---|
@@ -9,9 +16,9 @@ An [Umbrel](https://umbrel.com) community app store for [Braiins](https://braiin
 | **Bitcoin Data** | Difficulty statistics computed from your own Bitcoin node: current difficulty, the projected next adjustment, network hashrate, history charts and a table of all epochs with CSV/JSON export. No third-party APIs. | 4549 |
 | **Braiins Proxy** | Point your miners at your Umbrel: Braiins Proxy connects them to Braiins Pool, or any pool, over encrypted Stratum V2, with backup pools and a web interface showing miners, hashrate and pool state. Miners connect on port 3333. | 4550 |
 
-> **Status: preview.** The store is on a personal GitHub account until it
-> moves to a Braiins-owned organization. The store URL and the image location
-> will change before general availability.
+For a problem with an app on Umbrel (install, update, the Umbrel package),
+open an [issue in this repo](https://github.com/tgr-braiins/braiins-umbrel-apps/issues).
+Braiins support does not cover this store.
 
 ## For Umbrel users
 
@@ -19,7 +26,7 @@ An [Umbrel](https://umbrel.com) community app store for [Braiins](https://braiin
 
 1. In umbrelOS, open **App Store**, then **⋯ → Community App Stores**.
 2. Add `https://github.com/tgr-braiins/braiins-umbrel-apps`.
-3. Open the **Braiins** store and install the apps you want.
+3. Open the **Braiins (unofficial)** store and install the apps you want.
 
 ### Braiins Manager Agent
 
@@ -89,6 +96,8 @@ gh attestation verify \
 
 `Verification succeeded!` means the image was built by this repo's release
 workflow, and the output names the commit. An image from anywhere else fails.
+It does not mean Braiins built or approved the image: this repo is a personal
+project.
 The Braiins binaries inside are downloaded from `downloads.braiins.com` and
 checked against the sha256 in the official release feed during the build.
 Images released before November 2026 have no attestation.
@@ -339,7 +348,8 @@ by hand don't last.
 
 ### Path to the official App Store
 
-The plan is to submit the apps to
+This applies only if Braiins decides to list the apps officially; they would
+then be submitted to
 [getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps). Its
 `AGENTS.md` and `.agents/skills/` (`umbrel-package-app`, `umbrel-update-app`,
 `umbrel-test-app`, `umbrel-develop-app`) hold the official packaging rules;
@@ -352,7 +362,9 @@ about the manifest `icon` and `gallery`.
 
 Infrastructure, once:
 
-1. Move this repo and the GHCR images to a Braiins-owned organization (see the
+1. An official listing is for Braiins to decide and own; this personal
+   project can't submit in its name. If Braiins takes the store over, move
+   this repo and the GHCR images to a Braiins-owned organization (see the
    `# TODO` lines in the compose files) and update `REGISTRY_OWNER` in the
    workflows. Keep the packages public and digest-pinned.
 2. Start releases from the Braiins release pipelines (`repository_dispatch`)
