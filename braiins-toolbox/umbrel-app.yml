@@ -19,6 +19,11 @@ description: >-
   To get started, open the app and scan your miners' IP range from the Device
   List. Monitoring is read-only; management actions are always explicit —
   nothing is changed on your miners unless you trigger it.
+
+
+  Updates come through the Umbrel App Store. If the app itself offers an
+  update, ignore it and wait for the Update badge in Umbrel, usually within a
+  day.
 releaseNotes: |-
   Maintenance release of the Umbrel package (Braiins Toolbox 26.09 unchanged).
 
