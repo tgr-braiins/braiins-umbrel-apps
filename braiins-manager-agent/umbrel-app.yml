@@ -15,6 +15,11 @@ description: >-
   To use it you need a free Braiins Manager account. Add a new agent in
   Braiins Manager to obtain an Agent ID and Secret key, then paste them into
   this app's settings page.
+
+
+  Updates come through the Umbrel App Store. If the app itself offers an
+  update, ignore it and wait for the Update badge in Umbrel, usually within a
+  day.
 releaseNotes: |-
   Maintenance release of the Umbrel package (Braiins Manager Agent 4.15.0 unchanged).
 

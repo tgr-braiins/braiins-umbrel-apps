@@ -19,6 +19,11 @@ description: >-
   To get started, open the app and scan your miners' IP range from the Device
   List. Monitoring is read-only; management actions are always explicit —
   nothing is changed on your miners unless you trigger it.
+
+
+  Updates come through the Umbrel App Store. If the app itself offers an
+  update, ignore it and wait for the Update badge in Umbrel, usually within a
+  day.
 releaseNotes: |-
   Braiins **Toolbox 26.11** adds the Continuous Tuner as a tuner type in the CLI, accepts Stratum V1 over TLS pool URLs, warns about unsecured pool connections, detects LuxOS 2026.11.x again, and brings device list, error message, and logging fixes.
 

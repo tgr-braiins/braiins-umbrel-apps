@@ -63,6 +63,12 @@ When a new version is released, Umbrel shows an **Update** badge on the app.
 Updating keeps your settings: Agent credentials, Toolbox IP ranges and pool
 presets, and the Bitcoin Data cache.
 
+Toolbox, the Manager Agent and Braiins Proxy check for their own new versions
+and may say so inside the app. That in-app update can't run on Umbrel: wait
+for the Update badge and update the app from the Umbrel App Store. The store
+checks for new Braiins releases daily, so the badge usually follows within a
+day.
+
 ### Check that an image is the real one
 
 Every image released from this repo carries a signed build attestation: a
