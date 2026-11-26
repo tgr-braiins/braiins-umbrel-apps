@@ -2,7 +2,7 @@ manifestVersion: 1
 id: braiins-proxy
 category: bitcoin
 name: Braiins Proxy
-version: "0.1.1"
+version: "0.1.2-1"
 tagline: Connect all your miners to the pool through your Umbrel
 description: >-
   Braiins Proxy connects the miners at your site to Braiins Pool, or any
@@ -28,11 +28,11 @@ description: >-
   and web interface password are for installs outside Umbrel and are not
   used here.
 releaseNotes: |-
-  First version of Braiins Proxy on Umbrel (Braiins Proxy 0.1.1).
+  Maintenance release of the Umbrel package (Braiins Proxy 0.1.1 unchanged).
 
-  - Point your miners at your Umbrel on port 3333; the proxy connects them to Braiins Pool over encrypted Stratum V2, with backup pools ready.
-  - The web interface shows your miners, their hashrate and the pools, and lets you change the pools.
-  - Updates arrive through the Umbrel App Store.
+  - The app now shows the address your miners can actually reach: your Umbrel's address on your network. Before, it showed an internal address that did not work.
+  - If your Umbrel has several addresses (cable and Wi-Fi, or a VPN), you can choose the right one in the app.
+  - You can now use any mining port set in the app's settings, not only 3333–3339.
 
 developer: Braiins
 website: https://braiins.com

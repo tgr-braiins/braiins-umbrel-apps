@@ -6,6 +6,14 @@ of this repo use the next patch with a suffix (`0.1.2-1`), see DECISIONS.md.
 
 <!-- new entries are inserted directly below this line -->
 
+## [0.1.2-1] - 2026-11-26
+
+Maintenance release of the Umbrel package (Braiins Proxy 0.1.1 unchanged).
+
+- The app now shows the address your miners can actually reach: your Umbrel's address on your network. Before, it showed an internal address that did not work.
+- If your Umbrel has several addresses (cable and Wi-Fi, or a VPN), you can choose the right one in the app.
+- You can now use any mining port set in the app's settings, not only 3333–3339.
+
 ## [0.1.1] - 2026-11-25
 
 First package: Braiins Proxy 0.1.1 (rev 5158d572) from downloads.braiins.com

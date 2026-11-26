@@ -10,7 +10,7 @@ services:
   # on the host network (below) and so is not a service the app proxy can
   # name. Only the web interface passes through here, never miner traffic.
   web:
-    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.1@sha256:42a2c783a4c49e5df5cf9a162b9c45a63daa23d2ec945700f8c3e200a54f4ae8
+    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.2-1@sha256:d2d7f339bb6b68b10c55787f7fe62ab5f313d5891b082b50ef806f7ded888b5a
     user: "1000:1000"
     init: true
     restart: on-failure
@@ -18,7 +18,7 @@ services:
     command: ["TCP-LISTEN:8080,fork,reuseaddr", "TCP:10.21.0.1:24550"]
 
   proxy:
-    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.1@sha256:42a2c783a4c49e5df5cf9a162b9c45a63daa23d2ec945700f8c3e200a54f4ae8
+    image: ghcr.io/tgr-braiins/braiins-proxy:0.1.2-1@sha256:d2d7f339bb6b68b10c55787f7fe62ab5f313d5891b082b50ef806f7ded888b5a
     user: "1000:1000"
     init: true
     # the proxy exits on a fatal error and expects a supervisor to restart it
