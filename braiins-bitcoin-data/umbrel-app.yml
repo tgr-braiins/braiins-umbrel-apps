@@ -18,6 +18,11 @@ description: >-
   Requires the Bitcoin app. On first start the app reads one block header
   per difficulty epoch from your node (a few hundred headers, typically
   done in seconds) and keeps itself current from then on.
+
+
+  This app comes from an unofficial community app store, a personal project
+  that Braiins does not maintain or support. Report problems at
+  github.com/tgr-braiins/braiins-umbrel-apps.
 releaseNotes: |-
   Hashrate, the next retarget date and the halving date now stay sensible in the first blocks after a difficulty change. Before, they could be far off for about an hour every two weeks.
 
@@ -25,7 +30,7 @@ releaseNotes: |-
   - The projected difficulty change matches how Bitcoin measures an epoch.
   - A damaged cache file or a full disk no longer stops the live updates.
 
-developer: Braiins
+developer: tgr-braiins
 website: https://braiins.com
 dependencies:
   - bitcoin
@@ -72,5 +77,5 @@ widgets:
         - icon: "trending-up"
           text: "+2.1%"
           subtext: "Next adjust"
-submitter: Braiins
+submitter: tgr-braiins
 submission: ""

@@ -27,6 +27,13 @@ description: >-
   Braiins Proxy updates through the Umbrel App Store. Its own update command
   and web interface password are for installs outside Umbrel and are not
   used here.
+
+
+  This is an unofficial package from a community app store, a personal
+  project that Braiins does not maintain or support. It contains
+  the official Braiins Proxy release, unchanged.
+  Report problems with the Umbrel package at
+  github.com/tgr-braiins/braiins-umbrel-apps.
 releaseNotes: |-
   Maintenance release of the Umbrel package (Braiins Proxy 0.1.1 unchanged).
 
@@ -47,5 +54,5 @@ defaultUsername: ""
 defaultPassword: ""
 backupIgnore:
   - data/state/*
-submitter: Braiins
+submitter: tgr-braiins
 submission: ""

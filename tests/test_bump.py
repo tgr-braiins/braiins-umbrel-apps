@@ -123,7 +123,7 @@ class Release(RepoCopy):
         key, body, nxt = self.release_notes(DATA)
         self.assertEqual(key, "releaseNotes: |-")
         self.assertIn("  Fixed the first blocks of an epoch.", body)
-        self.assertEqual(nxt, "developer: Braiins")
+        self.assertEqual(nxt, "developer: tgr-braiins")
         self.assertIn('version: "%s"' % self.DATA_NEXT, self.read(DATA, "manifest"))
         self.assertIn("## [%s]" % self.DATA_NEXT, self.read(DATA, "changelog"))
 

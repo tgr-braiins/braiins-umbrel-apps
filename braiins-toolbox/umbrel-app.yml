@@ -24,6 +24,13 @@ description: >-
   Updates come through the Umbrel App Store. If the app itself offers an
   update, ignore it and wait for the Update badge in Umbrel, usually within a
   day.
+
+
+  This is an unofficial package from a community app store, a personal
+  project that Braiins does not maintain or support. It contains
+  the official Braiins Toolbox release, unchanged.
+  Report problems with the Umbrel package at
+  github.com/tgr-braiins/braiins-umbrel-apps.
 releaseNotes: |-
   Braiins **Toolbox 26.11** adds the Continuous Tuner as a tuner type in the CLI, accepts Stratum V1 over TLS pool URLs, warns about unsecured pool connections, detects LuxOS 2026.11.x again, and brings device list, error message, and logging fixes.
 
@@ -62,5 +69,5 @@ defaultPassword: ""
 backupIgnore:
   - data/.local/share/braiins-toolbox/logs/*
 
-submitter: Braiins
+submitter: tgr-braiins
 submission: ""
