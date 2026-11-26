@@ -3,9 +3,9 @@ FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5
 # set by BuildKit per platform; a default here would override it and put the
 # amd64 binary into the arm64 image
 ARG TARGETARCH
-ARG BMA_VERSION=4.15.0
-ARG SHA256_AMD64=f661a36a00a2f0caf2c3badbbc2b53e522942d4cb573a49c9412357c87dfd176
-ARG SHA256_ARM64=f27bbf22b0efb5424ea9adfd7a63f241744bb167d13cac40fad1636577fcccd8
+ARG BMA_VERSION=4.16.0
+ARG SHA256_AMD64=f61df24d7c5613b3f47a5fc4c2611c211345259e1021920aa447544b6368d90e
+ARG SHA256_ARM64=94db46eb3b5bae94b56fca77e235631788e87af3bd74d1f5a0b86cd827f57430
 
 RUN apk add --no-cache ca-certificates curl dpkg
 
