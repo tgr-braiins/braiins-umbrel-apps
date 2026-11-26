@@ -147,9 +147,14 @@ run as uid 1000 and keep their state in `/data`.
   Run it locally with `DEMO_MODE=1` to get synthetic data without a node.
 - **Braiins Proxy** (`image-braiins-proxy/`). Like Toolbox: it downloads the
   official tarball from `downloads.braiins.com/braiins-proxy/index.json`,
-  checks its sha256 and runs the binary as it is (`braiins-proxy run`), with
-  its web interface on :8080. The configuration (`/data/config.toml`) and the
-  hashrate history (`/data/state/braiins-proxy/history.db`) are on the volume.
+  checks its sha256 and runs the binary as it is (`braiins-proxy run`). The
+  configuration (`/data/config.toml`) and the hashrate history
+  (`/data/state/braiins-proxy/history.db`) are on the volume. The app runs
+  the image twice: `proxy` on the host network, so the web interface shows
+  miners the Umbrel's LAN address, and `web`, which uses the image's `socat`
+  to relay Umbrel's app proxy to the web interface (DECISIONS, "Host
+  network"). Both image lines in the compose file are pinned together
+  (`compose_images` in `bump.py`).
 
 ### CI
 
@@ -323,8 +328,12 @@ by hand don't last.
 - The Update badge appears when the manifest `version` string changes. Nothing
   else, such as a new image digest, triggers it.
 - The dashboard blocks `data:` URIs, so `icon` must be an https URL.
-- Bridge networking is enough. The agent and Toolbox find miners by TCP scans
-  of IP ranges.
+- Bridge networking is enough for the agent and Toolbox: they find miners by
+  TCP scans of IP ranges. Braiins Proxy is the exception and runs on the host
+  network, because it shows miners the address of the interface it sees.
+- `APP_HOST` must name a service of the compose file (linter rule
+  `app_proxy.host`). A service on the host network has no such name, so a
+  small relay service on the bridge network stands in for it.
 - umbreld ignores Docker health checks. Home-screen widgets are the only
   native place to show live status.
 
@@ -379,3 +388,11 @@ Questions to expect in review:
     accepted risk, described in DECISIONS.md. The real fixes are in the
     products: a login option in Toolbox and a guard against overwriting the
     agent's Secret key. Ideally they ship before submission.
+12. **Host networking in Braiins Proxy.** The linter asks for a justification
+    (`access.host_network`, a warning): the proxy shows miners the address of
+    its own network interface, and in a bridge container that is an internal
+    Docker address. Its web interface listens only on Umbrel's Docker gateway
+    address, behind the app proxy. The linter also prefers `restart:
+    on-failure` (`service.restart`, a warning); the proxy keeps
+    `unless-stopped` because it exits on a fatal error and expects to be
+    restarted. Both are described in DECISIONS.md.
