@@ -13,6 +13,20 @@ workflow opens a bump PR.
 
 <!-- new entries are inserted directly below this line -->
 
+## [4.16.0] - 2026-11-25
+
+The Braiins Manager Agent **4.16.0** release adds support for TLS/SSL pools on Braiins OS 26.11 and newer.
+
+### New
+- Pool configuration now accepts TLS pools (`stratum+tls`, `stratum+ssl`) on miners with Braiins OS 26.11 or newer. On a miner with older Braiins OS or other firmware, the change is refused before it starts, with a clear reason.
+- The agent now reports the tuner type (normal or continuous) of Braiins OS miners. Braiins OS older than 26.11 does not report it.
+
+### Improved
+- Pools that a miner reports without a scheme, for example `btc.viabtc.io:3333`, now show as plain Stratum V1 pools. Before, such pools were missing.
+- A DPS change on a Braiins OS miner with the continuous tuner type is now refused with a clear reason, and DPS shows as disabled on such a miner.
+
+For help, bug reports, or feature requests, please create a [support ticket](https://help.braiins.com/en/support/tickets/new)
+
 ## [4.15.1-1] - 2026-11-25
 
 Maintenance release of the Umbrel package (Braiins Manager Agent 4.15.0 unchanged).
